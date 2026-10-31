@@ -5,7 +5,13 @@ import logging
 import httpx
 import pytest
 
-from app.intent import Intent, ParserUnavailable, clean, parse_intent
+from app.intent import (
+    Intent,
+    ParserUnavailable,
+    clean,
+    fix_turkish_source_chain,
+    parse_intent,
+)
 from app.oneclick import QuoteError
 
 FAKE_KEY = "fake-key-not-real"
@@ -127,3 +133,41 @@ def test_clean_normalizes_fields():
     assert intent.from_chain == "sol"
     assert intent.from_token == "NEAR"
     assert intent.to_token == "USDC"
+
+
+def chains(text, from_chain=None, to_chain=None, action="swap"):
+    intent = Intent(**{**INTENT, "action": action, "from_chain": from_chain, "to_chain": to_chain})
+    fixed = fix_turkish_source_chain(text, intent)
+    return fixed.from_chain, fixed.to_chain
+
+
+@pytest.mark.parametrize("apostrophe", ["'", "’"])
+def test_bare_locative_moves_chain_to_source(apostrophe):
+    text = f"50 USDC'yi Solana{apostrophe}da SOL'a çevir"
+    assert chains(text, to_chain="sol") == ("sol", None)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "10 USDT'yi Solana üzerindeki SOL'a çevir",
+        "10 USDT'yi Solana'daki SOL'a çevir",
+        "10 USDT'yi Solana'ya taşı",
+        "swap 15 USDT to SOL on Solana",
+    ],
+)
+def test_destination_wording_keeps_to_chain(text):
+    assert chains(text, to_chain="sol") == (None, "sol")
+
+
+def test_locative_for_another_chain_changes_nothing():
+    assert chains("Base'de 10 USDT'yi SOL'a çevir", to_chain="sol") == (None, "sol")
+
+
+def test_named_source_chain_is_kept():
+    text = "USDC'yi Base'de Solana'da çevir"
+    assert chains(text, from_chain="base", to_chain="sol") == ("base", "sol")
+
+
+def test_only_swaps_are_changed():
+    assert chains("Solana'da SOL kaç dolar", to_chain="sol", action="price") == (None, "sol")

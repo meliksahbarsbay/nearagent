@@ -74,11 +74,16 @@ See: JSON with `"mode":"dry"`, a `spoken` sentence, a `quote` object, and a `cor
 
 `tests/intent_cases.json` holds 30 sentences, 15 Turkish and 15 English, with expected JSON. `python -m pytest -m live` compares a real provider with them. This run needs a key and costs a small amount.
 
+Latest result with OpenAI `gpt-6-luna`: 30 of 30, in three runs in a row. The first run scored 29 of 30, and repeated runs showed two sentences that failed some of the time. The prompt and one rule in code were then changed after seeing those failures, so this score is not from unseen data. The rule moves a chain to the source side when Turkish says `Solana'da`, because the model sometimes put it on the wrong side.
+
+NEAR AI Cloud has not been measured on this set yet.
+
 ## Known limits
 
 - `NEAR` maps to `wNEAR`, because 1Click lists NEAR that way on the NEAR chain.
 - Some quotes fail upstream with no specific reason, for example when the amount is too low. The app then gives a general spoken message.
 - Prices come from the 1Click token list, so they may be a few minutes old.
+- Sending to a person or a wallet address is not supported. Those sentences get the help reply.
 
 ## Configuration
 
