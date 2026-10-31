@@ -11,7 +11,6 @@ log = logging.getLogger("nearagent.oneclick")
 
 DEFAULT_BASE_URL = "https://1click.chaindefuser.com"
 DEFAULT_ACCOUNT = "dry-run.near"
-DEFAULT_CHAIN = "near"
 SLIPPAGE_BPS = 100
 QUOTE_TTL_MINUTES = 10
 TOKENS_TTL_SECONDS = 300
@@ -20,6 +19,49 @@ MAX_AMOUNT_CHARS = 40
 
 # 1Click lists native NEAR as wNEAR on the near chain.
 SYMBOL_ALIASES = {"NEAR": "WNEAR"}
+
+# Chain to assume when the user names none and a token is on several chains.
+HOME_CHAINS = {
+    "SOL": "sol",
+    "ETH": "eth",
+    "BTC": "btc",
+    "XRP": "xrp",
+    "DOGE": "doge",
+    "LTC": "ltc",
+    "ZEC": "zec",
+}
+FALLBACK_CHAINS = ("near", "eth", "sol")
+
+CHAIN_NAMES = {
+    "abs": "Abstract",
+    "aptos": "Aptos",
+    "arb": "Arbitrum",
+    "avax": "Avalanche",
+    "base": "Base",
+    "bsc": "BNB Chain",
+    "btc": "Bitcoin",
+    "cardano": "Cardano",
+    "doge": "Dogecoin",
+    "eth": "Ethereum",
+    "gnosis": "Gnosis",
+    "ltc": "Litecoin",
+    "near": "NEAR",
+    "op": "Optimism",
+    "pol": "Polygon",
+    "scroll": "Scroll",
+    "sol": "Solana",
+    "starknet": "Starknet",
+    "stellar": "Stellar",
+    "sui": "Sui",
+    "ton": "TON",
+    "tron": "Tron",
+    "xrp": "XRP Ledger",
+    "zec": "Zcash",
+}
+
+
+def chain_name(chain: str) -> str:
+    return CHAIN_NAMES.get(chain, chain)
 
 
 class QuoteError(Exception):
@@ -32,27 +74,34 @@ class QuoteError(Exception):
         self.details = details
 
 
-def find_token(tokens: list[dict], symbol: str) -> dict:
-    """Pick a token by symbol, preferring the NEAR chain."""
+def find_token(tokens: list[dict], symbol: str, chain: str | None = None) -> tuple[dict, bool]:
+    """Pick a token. Returns it and whether we chose the chain for the user."""
     wanted = symbol.strip().upper()
-    wanted = SYMBOL_ALIASES.get(wanted, wanted)
-    matches = [t for t in tokens if t["symbol"].upper() == wanted]
+    names = {wanted, SYMBOL_ALIASES.get(wanted, wanted)}
+    matches = [t for t in tokens if t["symbol"].upper() in names]
     if not matches:
         raise QuoteError("unknown_token", 404, symbol=symbol.strip())
-    for token in matches:
-        if token["blockchain"] == DEFAULT_CHAIN:
-            return token
-    if len(matches) == 1:
-        return matches[0]
-    raise QuoteError(
-        "ambiguous_token",
-        symbol=symbol.strip(),
-        chains=", ".join(sorted(t["blockchain"] for t in matches)),
-    )
+    if chain:
+        for token in matches:
+            if token["blockchain"] == chain:
+                return token, False
+        raise QuoteError(
+            "token_not_on_chain",
+            404,
+            symbol=symbol.strip(),
+            chain=chain_name(chain),
+            chains=", ".join(sorted(chain_name(t["blockchain"]) for t in matches)),
+        )
+    by_chain = {t["blockchain"]: t for t in reversed(matches)}
+    home = HOME_CHAINS.get(wanted)
+    for candidate in (home, *FALLBACK_CHAINS):
+        if candidate in by_chain:
+            return by_chain[candidate], len(by_chain) > 1
+    return matches[0], len(by_chain) > 1
 
 
-def to_atomic(amount: str, decimals: int) -> str:
-    """Convert a human amount such as "1,5" to atomic units."""
+def parse_amount(amount: str) -> Decimal:
+    """Read a human amount such as "1,5". Must be above zero."""
     text = amount.strip().replace(",", ".")
     if not text or len(text) > MAX_AMOUNT_CHARS:
         raise QuoteError("invalid_amount")
@@ -62,6 +111,12 @@ def to_atomic(amount: str, decimals: int) -> str:
         raise QuoteError("invalid_amount") from None
     if not value.is_finite() or value <= 0:
         raise QuoteError("invalid_amount")
+    return value
+
+
+def to_atomic(amount: str, decimals: int) -> str:
+    """Convert a human amount to atomic units."""
+    value = parse_amount(amount)
     atomic = (value * (Decimal(10) ** decimals)).to_integral_value(rounding=ROUND_DOWN)
     if atomic <= 0:
         raise QuoteError("invalid_amount")

@@ -4,16 +4,23 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+import app.main as main
+from app.intent import Intent, ParserUnavailable
 from app.main import app, get_oneclick
-from app.messages import format_amount
+from app.messages import detect_language, format_amount
 from app.oneclick import OneClick, QuoteError, build_quote_request, find_token, to_atomic
 
 TOKENS = [
-    {"assetId": "nep141:wrap.near", "decimals": 24, "blockchain": "near", "symbol": "wNEAR"},
-    {"assetId": "nep141:usdc.near", "decimals": 6, "blockchain": "near", "symbol": "USDC"},
-    {"assetId": "nep141:usdc.eth", "decimals": 6, "blockchain": "eth", "symbol": "USDC"},
-    {"assetId": "nep141:sol.a", "decimals": 9, "blockchain": "sol", "symbol": "ABC"},
-    {"assetId": "nep141:sol.b", "decimals": 9, "blockchain": "eth", "symbol": "ABC"},
+    {"assetId": "nep141:wrap.near", "decimals": 24, "blockchain": "near", "symbol": "wNEAR", "price": 4.3},
+    {"assetId": "1cs_v1:sol:wnear", "decimals": 24, "blockchain": "sol", "symbol": "wNEAR", "price": 4.3},
+    {"assetId": "nep141:usdc.eth", "decimals": 6, "blockchain": "eth", "symbol": "USDC", "price": 1.0},
+    {"assetId": "nep141:usdc.near", "decimals": 6, "blockchain": "near", "symbol": "USDC", "price": 1.0},
+    {"assetId": "nep141:usdc.base", "decimals": 6, "blockchain": "base", "symbol": "USDC", "price": 1.0},
+    {"assetId": "1cs_v1:aptos:sol", "decimals": 9, "blockchain": "aptos", "symbol": "SOL", "price": 180.5},
+    {"assetId": "nep141:sol.omft.near", "decimals": 9, "blockchain": "sol", "symbol": "SOL", "price": 180.5},
+    {"assetId": "nep141:eth.bridge.near", "decimals": 18, "blockchain": "near", "symbol": "ETH", "price": 2240.0},
+    {"assetId": "nep141:eth.omft.near", "decimals": 18, "blockchain": "eth", "symbol": "ETH", "price": 2240.0},
+    {"assetId": "nep141:only.base", "decimals": 18, "blockchain": "base", "symbol": "ONE", "price": 2.0},
 ]
 QUOTE = {
     "amountInFormatted": "1.0",
@@ -44,6 +51,13 @@ def payload(**changes):
     return {"from_token": "NEAR", "to_token": "USDC", "amount": "1", "lang": "tr", **changes}
 
 
+def use_intent(monkeypatch, **fields):
+    async def fake_parse(text):
+        return Intent(language="tr", **fields)
+
+    monkeypatch.setattr(main, "parse_intent", fake_parse)
+
+
 @pytest.mark.parametrize("dry", [True, False])
 def test_both_modes_use_intents(dry):
     body = build_quote_request("a", "b", "1", "x.near", dry=dry)
@@ -51,15 +65,41 @@ def test_both_modes_use_intents(dry):
     assert body["depositType"] == body["refundType"] == body["recipientType"] == "INTENTS"
 
 
-def test_find_token_prefers_near_and_maps_native_near():
-    assert find_token(TOKENS, "usdc")["assetId"] == "nep141:usdc.near"
-    assert find_token(TOKENS, "NEAR")["assetId"] == "nep141:wrap.near"
+@pytest.mark.parametrize(
+    "symbol, asset",
+    [
+        ("usdc", "nep141:usdc.near"),
+        ("NEAR", "nep141:wrap.near"),
+        ("SOL", "nep141:sol.omft.near"),
+        ("ETH", "nep141:eth.omft.near"),
+    ],
+)
+def test_default_chains_are_flagged_as_assumed(symbol, asset):
+    token, assumed = find_token(TOKENS, symbol)
+    assert token["assetId"] == asset
+    assert assumed is True
 
 
-def test_find_token_rejects_ambiguous_and_unknown():
-    with pytest.raises(QuoteError) as ambiguous:
-        find_token(TOKENS, "ABC")
-    assert ambiguous.value.code == "ambiguous_token"
+def test_single_chain_token_is_not_assumed():
+    token, assumed = find_token(TOKENS, "ONE")
+    assert token["blockchain"] == "base"
+    assert assumed is False
+
+
+def test_named_chain_is_used_and_not_assumed():
+    token, assumed = find_token(TOKENS, "USDC", "base")
+    assert token["assetId"] == "nep141:usdc.base"
+    assert assumed is False
+
+
+def test_token_missing_on_named_chain_lists_real_chains():
+    with pytest.raises(QuoteError) as missing:
+        find_token(TOKENS, "SOL", "base")
+    assert missing.value.code == "token_not_on_chain"
+    assert missing.value.details["chains"] == "Aptos, Solana"
+
+
+def test_unknown_token_is_rejected():
     with pytest.raises(QuoteError) as unknown:
         find_token(TOKENS, "NOPE")
     assert unknown.value.code == "unknown_token"
@@ -102,6 +142,9 @@ def test_quote_speaks_english():
     client, _ = make_client()
     data = client.post("/api/quote", json=payload(lang="en")).json()
     assert data["spoken"].startswith("Dry run. For 1 wNEAR")
+    assert data["spoken"].endswith(
+        "I used wNEAR on NEAR and USDC on NEAR; tell me if you want another chain."
+    )
 
 
 @pytest.mark.parametrize(
@@ -129,8 +172,78 @@ def test_upstream_rejection_is_spoken():
     assert response.json()["error"] == "quote_rejected"
 
 
+def test_ask_swap_names_the_chain_it_chose(monkeypatch):
+    client, sent = make_client()
+    use_intent(
+        monkeypatch, action="swap", amount="50", from_token="USDC", from_chain="base", to_token="SOL"
+    )
+    data = client.post("/api/ask", json={"text": "x"}).json()
+    assert data["action"] == "swap"
+    assert sent[0]["originAsset"] == "nep141:usdc.base"
+    assert sent[0]["destinationAsset"] == "nep141:sol.omft.near"
+    assert sent[0]["dry"] is True
+    assert data["spoken"].endswith("Solana üzerindeki SOL'u kullandım; başka zincir istersen söyle.")
+
+
+def test_ask_price_uses_token_list_and_requests_no_quote(monkeypatch):
+    client, sent = make_client()
+    use_intent(monkeypatch, action="price", amount="2", from_token="SOL")
+    data = client.post("/api/ask", json={"text": "x"}).json()
+    assert data["action"] == "price"
+    assert data["spoken"].startswith("2 SOL yaklaşık 361 dolar.")
+    assert sent == []
+
+
+def test_ask_price_defaults_to_one(monkeypatch):
+    client, _ = make_client()
+    use_intent(monkeypatch, action="price", from_token="ONE")
+    data = client.post("/api/ask", json={"text": "x"}).json()
+    assert data["spoken"] == "1 ONE yaklaşık 2 dolar."
+
+
+def test_ask_help(monkeypatch):
+    client, sent = make_client()
+    use_intent(monkeypatch, action="help")
+    data = client.post("/api/ask", json={"text": "x"}).json()
+    assert data["action"] == "help"
+    assert sent == []
+
+
+def test_ask_swap_without_amount_asks_for_it(monkeypatch):
+    client, sent = make_client()
+    use_intent(monkeypatch, action="swap", from_token="USDC", to_token="SOL")
+    response = client.post("/api/ask", json={"text": "x"})
+    assert response.json()["error"] == "missing_amount"
+    assert sent == []
+
+
+def test_ask_without_keys_points_to_the_form(monkeypatch):
+    client, _ = make_client()
+
+    async def unavailable(text):
+        raise ParserUnavailable
+
+    monkeypatch.setattr(main, "parse_intent", unavailable)
+    response = client.post("/api/ask", json={"text": "1 SOL kaç dolar"})
+    assert response.status_code == 503
+    assert response.json()["language"] == "tr"
+    assert "Gelişmiş" in response.json()["spoken"]
+
+
+def test_ask_rejects_empty_and_long_text():
+    client, _ = make_client()
+    assert client.post("/api/ask", json={"text": "  "}).json()["error"] == "empty_text"
+    assert client.post("/api/ask", json={"text": "a" * 301}).json()["error"] == "too_long"
+
+
+def test_detect_language():
+    assert detect_language("1 SOL kaç dolar") == "tr"
+    assert detect_language("price of NEAR") == "en"
+
+
 def test_page_is_served():
     client, _ = make_client()
     response = client.get("/")
     assert response.status_code == 200
     assert 'aria-live="polite"' in response.text
+    assert "<details>" in response.text

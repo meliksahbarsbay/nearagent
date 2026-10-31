@@ -8,23 +8,27 @@ Swap interfaces are visual: charts, popups, and icon-only buttons. A blind user 
 
 ## What works today
 
-- A single page with labelled fields, full keyboard use, and one `aria-live` result area.
-- `POST /api/quote`: looks up tokens with 1Click `GET /v0/tokens`, requests a dry quote with `POST /v0/quote`, and returns a spoken sentence in Turkish or English.
-- Dry mode only. The code cannot execute a swap today, and no keys are needed.
+- One text box. Write a sentence in Turkish or English, for example `50 USDC'yi Solana'da SOL'a çevir`, `swap 2 NEAR to USDC on Base`, or `1 SOL kaç dolar`.
+- The reply language follows the sentence, and the reply is read from one `aria-live` area.
+- `POST /api/ask` extracts `action` (swap, price, or help), `amount`, `from_token`, `from_chain`, `to_token`, `to_chain`, and `language` as schema-checked JSON.
+- If a token is on several chains and no chain is named, the app picks a default and says so. SOL uses Solana, ETH uses Ethereum, BTC uses Bitcoin, and USDC uses NEAR.
+- An Advanced section keeps a field-based form, `POST /api/quote`, which works with no keys.
+- Dry mode only. The code cannot execute a swap today.
 
 ## Planned, not built yet
 
-- Voice and free-text input, parsed by NEAR AI Cloud with OpenAI as fallback.
+- Voice input.
 - Live execution through a policy-bound Agent API wallet. It is mainnet only and uses real funds, so it will stay off by default, use a separate account with small amounts, and require explicit user confirmation for every action.
 
 ## How NEAR is used
 
-- NEAR Intents 1Click API for token data and quotes.
+- NEAR AI Cloud parses sentences through its OpenAI-compatible API. The default model is `z-ai/glm-5.3-flash`, listed as Private TEE. OpenAI is the fallback, used when the NEAR AI key is missing or NEAR AI fails.
+- NEAR Intents 1Click API supplies token data, prices, and quotes.
 - Dry and live quotes share one code path, and both use `INTENTS` for `depositType`, `refundType`, and `recipientType`. Only the `dry` flag differs.
 
 ## Run it
 
-Requires Python 3.10 or later. No keys or accounts are needed.
+Requires Python 3.10 or later.
 
 ```sh
 git clone https://github.com/meliksahbarsbay/nearagent.git
@@ -38,20 +42,27 @@ Activate on Windows PowerShell: `.venv\Scripts\Activate.ps1`
 
 ```sh
 python -m pip install -r requirements.txt
+```
+
+Sentences need a key. Copy `.env.example` to `.env`, then set `NEAR_AI_API_KEY` or `OPENAI_API_KEY`. Without a key, the text box says parsing is off and the Advanced form still works.
+
+```sh
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
 ## Try it: do X, see Y
 
-Prices below are examples, so your numbers will differ.
+Prices below are examples, so your numbers will differ. Steps 3 to 7 need a key.
 
 1. Do: run `python -m pytest -q`. See: all tests pass, with no network calls.
-2. Do: open http://127.0.0.1:8000. See: a form with fields for language, token to send, token to receive, and amount.
-3. Do: press Tab until the submit button has focus, then press Enter. See: the Result area gets a sentence like `Deneme modu. 1 wNEAR karşılığında yaklaşık 4,2854 USDC alırsın. En az 4,242546 USDC. Tahmini süre 12 saniye. Hiçbir işlem yapılmadı.`
-4. Do: choose English in the language field and submit again. See: `Dry run. For 1 wNEAR you would get about ...`
-5. Do: enter `abc` as the amount and submit. See: a spoken error asking for a number above zero.
-6. Do: enter `XXXX` as the token to receive and submit. See: a spoken error saying the token was not found.
-7. Do: call the API directly:
+2. Do: open http://127.0.0.1:8000 and press Tab. See: focus lands on the text box labelled `Ne yapmak istiyorsun?`
+3. Do: type `1 SOL kaç dolar` and press Enter. See: a sentence like `1 SOL yaklaşık 95,93 dolar. Solana üzerindeki SOL'u kullandım; başka zincir istersen söyle.`
+4. Do: type `swap 2 NEAR to USDC on Base` and press Enter. See: `Dry run. For 2 wNEAR you would get about ...`, and the page labels change to English.
+5. Do: type `50 USDC'yi Solana'da SOL'a çevir` and press Enter. See: a Turkish dry quote that ends by naming the chain it chose.
+6. Do: type `merhaba` and press Enter. See: a short Turkish help message.
+7. Do: type `swap NEAR to USDC` and press Enter. See: a request to say how much.
+8. Do: Tab to the Advanced section and press Enter to open it, Tab to the submit button, and press Enter. See: a dry quote from the field-based form. This step needs no key.
+9. Do: call the API directly:
 
 ```sh
 curl -X POST http://127.0.0.1:8000/api/quote -H "Content-Type: application/json" -d "{\"from_token\":\"NEAR\",\"to_token\":\"USDC\",\"amount\":\"1\",\"lang\":\"en\"}"
@@ -59,11 +70,15 @@ curl -X POST http://127.0.0.1:8000/api/quote -H "Content-Type: application/json"
 
 See: JSON with `"mode":"dry"`, a `spoken` sentence, a `quote` object, and a `correlationId`.
 
+## Parser evaluation
+
+`tests/intent_cases.json` holds 30 sentences, 15 Turkish and 15 English, with expected JSON. `python -m pytest -m live` compares a real provider with them. This run needs a key and costs a small amount.
+
 ## Known limits
 
 - `NEAR` maps to `wNEAR`, because 1Click lists NEAR that way on the NEAR chain.
-- A symbol resolves to its NEAR chain token. A symbol on several chains but not on NEAR, such as `SOL`, returns a spoken error for now.
 - Some quotes fail upstream with no specific reason, for example when the amount is too low. The app then gives a general spoken message.
+- Prices come from the 1Click token list, so they may be a few minutes old.
 
 ## Configuration
 
