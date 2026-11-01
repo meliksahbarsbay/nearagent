@@ -1,4 +1,5 @@
 """nearagent API. Serves the page, sentence requests, and the advanced form."""
+from decimal import Decimal
 from pathlib import Path
 from typing import Literal
 
@@ -10,12 +11,15 @@ from pydantic import BaseModel
 
 load_dotenv()
 
+from app.confirm import Pending, PendingStore, answer_word, read_amount  # noqa: E402
 from app.intent import Intent, ParserUnavailable, parse_intent  # noqa: E402
 from app.messages import (  # noqa: E402
     detect_language,
     from_atomic,
     say,
     say_assumed,
+    say_error,
+    say_large,
     say_price,
     say_quote,
 )
@@ -31,9 +35,11 @@ from app.oneclick import (  # noqa: E402
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 MAX_TOKEN_TEXT = 64
 MAX_SENTENCE = 300
+LARGE_USD = Decimal(100)
 
 app = FastAPI(title="nearagent")
 oneclick = OneClick()
+pendings = PendingStore()
 
 
 class QuoteInput(BaseModel):
@@ -45,21 +51,49 @@ class QuoteInput(BaseModel):
 
 class AskInput(BaseModel):
     text: str = ""
+    pending: str | None = None
+    lang: Literal["tr", "en"] | None = None
 
 
 def get_oneclick() -> OneClick:
     return oneclick
 
 
-def error_response(error: QuoteError, lang: str) -> JSONResponse:
-    return JSONResponse(
-        status_code=error.status,
-        content={
-            "error": error.code,
-            "language": lang,
-            "spoken": say(error.code, lang, **error.details),
-        },
-    )
+def error_response(error: QuoteError, lang: str, pending: str | None = None) -> JSONResponse:
+    content = {
+        "error": error.code,
+        "language": lang,
+        "spoken": say_error(error.code, lang, error.details),
+    }
+    if pending:
+        content["pending"] = pending
+    return JSONResponse(status_code=error.status, content=content)
+
+
+def reply(action: str, key: str, lang: str, pending: str | None = None) -> dict:
+    content = {"action": action, "language": lang, "spoken": say(key, lang)}
+    if pending:
+        content["pending"] = pending
+    return content
+
+
+async def resolve_pair(
+    client: OneClick,
+    from_token: str,
+    from_chain: str | None,
+    to_token: str,
+    to_chain: str | None,
+) -> tuple[dict, bool, dict, bool]:
+    if not from_token.strip() or not to_token.strip():
+        raise QuoteError("missing_token")
+    if max(len(from_token), len(to_token)) > MAX_TOKEN_TEXT:
+        raise QuoteError("unknown_token", 404, symbol="")
+    tokens = await client.tokens()
+    origin, origin_assumed = find_token(tokens, from_token, from_chain)
+    destination, destination_assumed = find_token(tokens, to_token, to_chain)
+    if origin["assetId"] == destination["assetId"]:
+        raise QuoteError("same_token")
+    return origin, origin_assumed, destination, destination_assumed
 
 
 async def run_swap(
@@ -71,15 +105,9 @@ async def run_swap(
     amount: str,
     lang: str,
 ) -> dict:
-    if not from_token.strip() or not to_token.strip():
-        raise QuoteError("missing_token")
-    if max(len(from_token), len(to_token)) > MAX_TOKEN_TEXT:
-        raise QuoteError("unknown_token", 404, symbol="")
-    tokens = await client.tokens()
-    origin, origin_assumed = find_token(tokens, from_token, from_chain)
-    destination, destination_assumed = find_token(tokens, to_token, to_chain)
-    if origin["assetId"] == destination["assetId"]:
-        raise QuoteError("same_token")
+    origin, origin_assumed, destination, destination_assumed = await resolve_pair(
+        client, from_token, from_chain, to_token, to_chain
+    )
     atomic = to_atomic(amount, origin["decimals"])
     # Live execution is not built: this path only ever asks for dry quotes.
     body = build_quote_request(
@@ -89,18 +117,26 @@ async def run_swap(
     details = result["quote"]
     min_out = from_atomic(details["minAmountOut"], destination["decimals"])
     assumed = [t for t, flag in ((origin, origin_assumed), (destination, destination_assumed)) if flag]
-    spoken = say_quote(details, origin["symbol"], destination["symbol"], min_out, lang)
+    terms = say_quote(details, origin["symbol"], destination["symbol"], min_out, lang)
+
+    value_in = Decimal(details.get("amountInUsd") or 0)
+    if value_in > LARGE_USD:
+        kind, question = "large", say_large(value_in, lang)
+    else:
+        kind, question = "confirm", say("confirm_question", lang)
     return {
         "action": "swap",
         "mode": "dry",
         "language": lang,
-        "spoken": spoken + say_assumed(assumed, lang),
+        "pending": pendings.add(kind, lang),
+        "spoken": f"{terms}{say_assumed(assumed, lang)} {question}",
         "quote": {
             "from": origin["assetId"],
             "to": destination["assetId"],
             "amountIn": details["amountInFormatted"],
             "amountOut": details["amountOutFormatted"],
             "minAmountOut": min_out,
+            "amountInUsd": details.get("amountInUsd"),
             "amountOutUsd": details["amountOutUsd"],
             "timeEstimate": details["timeEstimate"],
         },
@@ -125,31 +161,67 @@ async def run_price(client: OneClick, intent: Intent) -> dict:
 
 
 async def run_intent(client: OneClick, intent: Intent) -> dict:
+    lang = intent.language
     if intent.action == "help":
-        return {
-            "action": "help",
-            "language": intent.language,
-            "spoken": say("help", intent.language),
-        }
+        return reply("help", "help", lang)
     if intent.action == "price":
         return await run_price(client, intent)
-    if not intent.amount:
-        raise QuoteError("missing_amount")
-    return await run_swap(
-        client,
-        intent.from_token or "",
-        intent.from_chain,
-        intent.to_token or "",
-        intent.to_chain,
-        intent.amount,
-        intent.language,
-    )
+    swap = {
+        "from_token": intent.from_token or "",
+        "from_chain": intent.from_chain,
+        "to_token": intent.to_token or "",
+        "to_chain": intent.to_chain,
+    }
+    if intent.amount:
+        return await run_swap(client, amount=intent.amount, lang=lang, **swap)
+    # Check the tokens first, so nobody answers a question for a swap that cannot happen.
+    await resolve_pair(client, **swap)
+    return reply("ask_amount", "missing_amount", lang, pendings.add("amount", lang, swap))
+
+
+async def answer_amount(client: OneClick, key: str, item: Pending, text: str) -> dict | JSONResponse:
+    amount = read_amount(text, item.swap["from_token"])
+    if amount is None:
+        return reply("ask_amount", "amount_again", item.lang, key)
+    try:
+        offer = await run_swap(client, amount=amount, lang=item.lang, **item.swap)
+    except QuoteError as error:
+        # The tokens stay valid, so the user can answer again with another amount.
+        return error_response(error, item.lang, key)
+    pendings.drop(key)
+    return offer
+
+
+async def answer_pending(
+    client: OneClick, key: str, text: str, lang: str
+) -> dict | JSONResponse:
+    item = pendings.get(key)
+    if item is None:
+        return reply("expired", "expired", lang)
+    word = answer_word(text)
+    if word == "no":
+        pendings.drop(key)
+        return reply("cancelled", "cancelled", item.lang)
+    if item.kind == "amount":
+        return await answer_amount(client, key, item, text)
+    # The page sends empty text when Enter is pressed on the empty box.
+    if word != "yes" and text:
+        return reply(item.kind, "not_understood", item.lang, key)
+    if item.kind == "large":
+        item.kind = "confirm"
+        return reply("confirm", "confirm_question", item.lang, key)
+    pendings.drop(key)
+    return {**reply("confirmed", "confirmed_dry", item.lang), "mode": "dry"}
 
 
 @app.post("/api/ask")
 async def ask(data: AskInput, client: OneClick = Depends(get_oneclick)):
     text = data.text.strip()
-    lang = detect_language(text)
+    if data.pending:
+        # "evet" alone gives no language hint, so the page language decides.
+        lang = data.lang or detect_language(text)
+        return await answer_pending(client, data.pending, text, lang)
+    lang = data.lang if data.lang and not text else detect_language(text)
     try:
         if not text:
             raise QuoteError("empty_text")
