@@ -16,6 +16,11 @@ COMMANDS = {
         "tr": re.compile(r"\bbutce\w*\b.*\b(kadar|kaldi|kalan|oku|ne|nedir|soyle)\b"),
         "en": re.compile(r"\bbudget\b.*\b(left|remaining)\b|\b(how much|read|show|what is)\b.*\bbudget\b"),
     },
+    # Before freeze, so "dondurmayı kaldır" is never read as a request to freeze.
+    "unfreeze": {
+        "tr": re.compile(r"\bajan\w*\s+(\S+\s+)?(coz|ac)\b|\bdondurma\w*\s+(kaldir|coz|ac)\b"),
+        "en": re.compile(r"\bunfreeze\b"),
+    },
     "freeze": {
         "tr": re.compile(r"\bajan\w*\s+(\S+\s+)?dondur\w*\b|\bacil durdur\w*\b"),
         "en": re.compile(r"\bfreeze\b.*\bagent\b|\bemergency stop\b"),

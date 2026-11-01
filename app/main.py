@@ -1,5 +1,7 @@
 """nearagent API. Serves the page, sentence requests, and the advanced form."""
+from datetime import datetime, timezone
 from decimal import Decimal
+from math import ceil
 from pathlib import Path
 from typing import Literal
 
@@ -20,7 +22,14 @@ from app.agent_api import (  # noqa: E402
     read_agent_policy,
 )
 from app.commands import detect_command  # noqa: E402
-from app.confirm import Pending, PendingStore, answer_word, read_amount  # noqa: E402
+from app.confirm import (  # noqa: E402
+    Pending,
+    PendingStore,
+    answer_word,
+    code_matches,
+    new_code,
+    read_amount,
+)
 from app.intent import Intent, ParserUnavailable, parse_intent  # noqa: E402
 from app.messages import (  # noqa: E402
     detect_language,
@@ -33,6 +42,13 @@ from app.messages import (  # noqa: E402
     say_policy,
     say_price,
     say_quote,
+)
+from app.owner import (  # noqa: E402
+    OwnerError,
+    OwnerKeyMissing,
+    ResultPending,
+    control_agent,
+    owner_ready,
 )
 from app.oneclick import (  # noqa: E402
     OneClick,
@@ -47,6 +63,12 @@ WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 MAX_TOKEN_TEXT = 64
 MAX_SENTENCE = 300
 LARGE_USD = Decimal(100)
+MAX_CODE_ATTEMPTS = 3
+UNFREEZE_COOLDOWN_MINUTES = 10
+ALREADY_DONE = {
+    "wallet_already_frozen": "already_frozen",
+    "wallet_already_unfrozen": "already_unfrozen",
+}
 
 app = FastAPI(title="nearagent")
 oneclick = OneClick()
@@ -221,6 +243,60 @@ def ask_again(item: Pending, key: str, message: str) -> dict:
     return {**reply(item.kind, message, item.lang, key), "confirm_button": item.live}
 
 
+def minutes_until(moment: str | None) -> int:
+    if not moment:
+        return UNFREEZE_COOLDOWN_MINUTES
+    ready = datetime.fromisoformat(moment.replace("Z", "+00:00"))
+    seconds = (ready - datetime.now(timezone.utc)).total_seconds()
+    return max(1, ceil(seconds / 60))
+
+
+async def run_control(kind: str, lang: str) -> dict:
+    """Sign a freeze or unfreeze. Only a confirmed result is reported as done."""
+    done = "freeze_done" if kind == "agent_freeze" else "unfreeze_done"
+    action = "freeze" if kind == "agent_freeze" else "unfreeze"
+    try:
+        await control_agent(kind)
+    except OwnerKeyMissing:
+        return reply(action, "owner_key_missing", lang)
+    except (ResultPending, AgentApiRequestError):
+        # No answer does not mean no effect: it may have reached the chain.
+        return reply(action, "control_pending", lang)
+    except AgentApiError as error:
+        if error.code == "agent_unfreeze_throttled":
+            minutes = minutes_until(error.available_at)
+            return {
+                "action": action,
+                "language": lang,
+                "spoken": say("unfreeze_wait", lang, minutes=minutes),
+            }
+        return reply(action, ALREADY_DONE.get(error.code, "control_failed"), lang)
+    except OwnerError:
+        return reply(action, "control_failed", lang)
+    return {**reply(action, done, lang), "signed": True}
+
+
+def ask_unfreeze(lang: str) -> dict:
+    if not owner_ready():
+        return reply("unfreeze", "owner_key_missing", lang)
+    code = new_code()
+    key = pendings.add("unfreeze", lang, code=code)
+    spoken = say("unfreeze_plan", lang, code=" ".join(code))
+    return {"action": "unfreeze", "language": lang, "pending": key, "spoken": spoken}
+
+
+async def answer_unfreeze(key: str, item: Pending, text: str) -> dict:
+    """Only the code signs: not Enter, not yes, and not a sentence."""
+    if not code_matches(text, item.code):
+        item.attempts += 1
+        if item.attempts >= MAX_CODE_ATTEMPTS:
+            pendings.drop(key)
+            return reply("cancelled", "code_locked", item.lang)
+        return reply("unfreeze", "code_wrong", item.lang, key)
+    pendings.drop(key)
+    return await run_control("agent_unfreeze", item.lang)
+
+
 async def answer_pending(
     client: OneClick, key: str, text: str, lang: str
 ) -> dict | JSONResponse:
@@ -231,6 +307,8 @@ async def answer_pending(
     if word == "no":
         pendings.drop(key)
         return reply("cancelled", "cancelled", item.lang)
+    if item.kind == "unfreeze":
+        return await answer_unfreeze(key, item, text)
     if item.kind == "amount":
         return await answer_amount(client, key, item, text)
     if word != "yes":
@@ -253,7 +331,9 @@ async def run_command(command: str, lang: str) -> dict:
     if not agent_ready():
         return reply(command, "no_agent", lang)
     if command == "freeze":
-        return reply(command, "freeze_manual", lang)
+        return await run_control("agent_freeze", lang)
+    if command == "unfreeze":
+        return ask_unfreeze(lang)
     try:
         data = await read_agent_policy()
     except (AgentApiError, AgentApiRequestError):
@@ -265,6 +345,12 @@ async def run_command(command: str, lang: str) -> dict:
 @app.post("/api/ask")
 async def ask(data: AskInput, client: OneClick = Depends(get_oneclick)):
     text = data.text.strip()
+    command = detect_command(text) if len(text) <= MAX_SENTENCE else None
+    # The emergency stop never waits behind an open question. The words are the approval.
+    if command and command[0] == "freeze":
+        if data.pending:
+            pendings.drop(data.pending)
+        return await run_command(*command)
     if data.pending:
         # "evet" alone gives no language hint, so the page language decides.
         lang = data.lang or detect_language(text)
@@ -275,7 +361,6 @@ async def ask(data: AskInput, client: OneClick = Depends(get_oneclick)):
             raise QuoteError("empty_text")
         if len(text) > MAX_SENTENCE:
             raise QuoteError("too_long")
-        command = detect_command(text)
         if command:
             lang = command[1]
             return await run_command(*command)

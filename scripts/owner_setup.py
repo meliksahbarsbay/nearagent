@@ -1,10 +1,13 @@
 """Set up the agent on NEAR mainnet with the owner's key. Only the owner runs this.
 
-    python scripts/owner_setup.py plan                 Show the rules. Signs nothing.
-    python scripts/owner_setup.py create --onay=KOD    Sign and create the agent.
-    python scripts/owner_setup.py grant --onay=KOD     Sign the grant for this backend.
-    python scripts/owner_setup.py freeze --onay=dondur Stop every action of the agent.
-    python scripts/owner_setup.py unfreeze --onay=ac   Let the agent act again.
+    python scripts/owner_setup.py plan                Show the rules. Signs nothing.
+    python scripts/owner_setup.py create --onay=KOD   Sign and create the agent.
+    python scripts/owner_setup.py grant --onay=KOD    Sign the grant for this backend.
+    python scripts/owner_setup.py deposit             Get the address that funds the agent.
+    python scripts/owner_setup.py balance             Read the agent's balance.
+    python scripts/owner_setup.py freeze              Stop every action now, in one step.
+    python scripts/owner_setup.py unfreeze            Show the code that unfreezing needs.
+    python scripts/owner_setup.py unfreeze --onay=KOD Sign and let the agent act again.
 
 `plan` saves the exact rules and prints a code. `create` signs only those saved rules, and
 only with that code, so what you read is what gets signed. Keys stay in .env, are passed to
@@ -14,7 +17,6 @@ import argparse
 import asyncio
 import hashlib
 import json
-import os
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
@@ -29,9 +31,6 @@ sys.path.insert(0, str(ROOT))
 
 from app.agent_api import (  # noqa: E402
     DEFAULT_BASE_URL,
-    FINAL_STATUSES,
-    PENDING_STATUSES,
-    REVIEW_STATUS,
     AgentApi,
     AgentApiError,
     AgentApiRequestError,
@@ -40,10 +39,11 @@ from app.agent_api import (  # noqa: E402
     new_idempotency_key,
     safe_policy,
 )
+from app.owner import DEFAULT_RPC_URL, run_intent  # noqa: E402
+from app.owner import OwnerError as SetupError  # noqa: E402
 
 ENV_PATH = ROOT / ".env"
 PLAN_PATH = ROOT / "scripts" / "owner" / "plan.json"
-SIGNER = ROOT / "scripts" / "owner" / "sign_intent.mjs"
 
 PER_TRANSACTION_USD = Decimal(5)
 DAILY_USD = "10"
@@ -52,23 +52,17 @@ AGENT_NAME = "nearagent"
 GRANT_LABEL = "nearagent backend"
 GRANT_DAYS = 30
 PLAN_MAX_AGE = timedelta(hours=1)
-DEFAULT_RPC_URL = "https://free.rpc.fastnear.com"
-POLL_LIMIT = 40
-SIGN_TIMEOUT_SECONDS = 45
+FUNDING_TOKEN = ("USDC", "base")
 
 # Symbol and chain as GET /v1/tokens lists them. USDC appears twice, because the docs fund
 # an agent with USDC on Base and the app's quotes default to USDC on NEAR.
 WANTED_TOKENS = (
     ("USDC", "near"),
-    ("USDC", "base"),
+    FUNDING_TOKEN,
     ("wNEAR", "near"),
     ("SOL", "sol"),
     ("ETH", "eth"),
 )
-
-
-class SetupError(Exception):
-    """A stop the owner should read. The text never holds a secret."""
 
 
 def assert_env_ignored(path: Path = ENV_PATH) -> None:
@@ -88,18 +82,15 @@ def per_transaction_cap(token: dict) -> str:
     return str(amount.to_integral_value(rounding=ROUND_DOWN))
 
 
-def pick_tokens(tokens: list[dict]) -> list[dict]:
-    found = []
-    for symbol, chain in WANTED_TOKENS:
-        match = [t for t in tokens if t["symbol"] == symbol and t["blockchain"] == chain]
-        if len(match) != 1:
-            raise SetupError(f"{symbol} ({chain}) token listesinde tek olarak bulunamadi.")
-        found.append(match[0])
-    return found
+def pick_token(tokens: list[dict], symbol: str, chain: str) -> dict:
+    match = [t for t in tokens if t["symbol"] == symbol and t["blockchain"] == chain]
+    if len(match) != 1:
+        raise SetupError(f"{symbol} ({chain}) token listesinde tek olarak bulunamadi.")
+    return match[0]
 
 
 def build_plan(owner_account: str, owner_public_key: str, tokens: list[dict]) -> dict:
-    picked = pick_tokens(tokens)
+    picked = [pick_token(tokens, symbol, chain) for symbol, chain in WANTED_TOKENS]
     caps = {t["asset_id"]: per_transaction_cap(t) for t in picked}
     policy = safe_policy(owner_account, caps, DAILY_USD, MAX_ACTIONS_PER_HOUR)
     return {
@@ -118,10 +109,19 @@ def build_plan(owner_account: str, owner_public_key: str, tokens: list[dict]) ->
     }
 
 
+def short_code(value: dict) -> str:
+    signed = json.dumps(value, sort_keys=True)
+    return hashlib.sha256(signed.encode("utf-8")).hexdigest()[:12]
+
+
 def plan_code(plan: dict) -> str:
     """A short code for the exact owner and rules, for the owner to pass back."""
-    signed = json.dumps({"owner": plan["owner"], "policy": plan["policy"]}, sort_keys=True)
-    return hashlib.sha256(signed.encode("utf-8")).hexdigest()[:12]
+    return short_code({"owner": plan["owner"], "policy": plan["policy"]})
+
+
+def unfreeze_code(env: dict) -> str:
+    """The same idea for unfreezing: a code for this owner and this agent."""
+    return short_code({"owner": owner_from(env), "intent": "agent_unfreeze", "agent": env["AGENT_ID"]})
 
 
 def load_plan(code: str, path: Path = PLAN_PATH, now: datetime | None = None) -> dict:
@@ -134,46 +134,6 @@ def load_plan(code: str, path: Path = PLAN_PATH, now: datetime | None = None) ->
     if (now or datetime.now(timezone.utc)) - created > PLAN_MAX_AGE:
         raise SetupError("Plan bir saatten eski, fiyatlar degismis olabilir. Plani yenile.")
     return plan
-
-
-def normalized(policy: dict) -> dict:
-    return {**policy, "assets": sorted(policy["assets"])}
-
-
-def check_intent(generated: dict, owner: dict, policy: dict | None = None) -> None:
-    """Stop before signing if the API prepared something other than what was approved."""
-    signer = generated.get("signer") or {}
-    if signer.get("account_id") != owner["account_id"] or signer.get("public_key") != owner["public_key"]:
-        raise SetupError("API baska bir imzaci istiyor. Imzalanmadi.")
-    if policy is None:
-        return
-    shown = (generated.get("preview") or {}).get("policy") or {}
-    same = all(normalized(shown).get(key) == value for key, value in normalized(policy).items()) if shown.get("assets") else False
-    if not same:
-        raise SetupError("API'nin hazirladigi politika onaylanan plana uymuyor. Imzalanmadi.")
-
-
-def sign(generated: dict, env: dict) -> dict:
-    """Run the Node signer. The key travels in its environment, never in arguments."""
-    try:
-        done = subprocess.run(
-            ["node", str(SIGNER)],
-            input=json.dumps(generated),
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            timeout=SIGN_TIMEOUT_SECONDS,
-            env={
-                **os.environ,
-                "OWNER_PRIVATE_KEY": env["OWNER_PRIVATE_KEY"],
-                "NEAR_RPC_URL": env.get("NEAR_RPC_URL") or DEFAULT_RPC_URL,
-            },
-        )
-    except subprocess.TimeoutExpired:
-        raise SetupError("Imza zaman asimina ugradi. Hicbir sey gonderilmedi.") from None
-    if done.returncode != 0:
-        raise SetupError(f"Imza atilamadi: {done.stderr.strip()[:60]}")
-    return json.loads(done.stdout)
 
 
 async def owner_key_is_live(account_id: str, public_key: str, rpc_url: str, transport=None) -> bool:
@@ -195,33 +155,21 @@ async def owner_key_is_live(account_id: str, public_key: str, rpc_url: str, tran
     return result.get("permission") == "FullAccess"
 
 
-async def wait_for(api: AgentApi, correlation_id: str) -> dict:
-    for _ in range(POLL_LIMIT):
-        status = await api.status(correlation_id)
-        if status["status"] in FINAL_STATUSES or status["status"] == REVIEW_STATUS:
-            return status
-        if status["status"] not in PENDING_STATUSES and status["status"] != "PENDING_SIGNATURE":
-            return status
-    raise SetupError(f"Sonuc henuz belli degil. Takip kodu: {correlation_id}")
-
-
-async def run_intent(api: AgentApi, intent: dict, env: dict, owner: dict, policy=None) -> dict:
-    generated = await api.generate_intent(intent, new_idempotency_key())
-    print("API ozeti:", (generated.get("preview") or {}).get("summary"))
-    check_intent(generated, owner, policy)
-    signed = sign(generated, env)
-    await api.submit_intent(generated["type"], generated["correlation_id"], signed)
-    status = await wait_for(api, generated["correlation_id"])
-    if status["status"] != "SUCCESS":
-        code = status.get("failure_code") or status["status"]
-        raise SetupError(f"Tamamlanmadi: {code}. Takip kodu: {generated['correlation_id']}")
-    return status
-
-
 def require(env: dict, *names: str) -> None:
     missing = [name for name in names if not env.get(name)]
     if missing:
         raise SetupError(f".env icinde eksik: {', '.join(missing)}")
+
+
+def require_owner(env: dict, *extra: str) -> None:
+    require(
+        env,
+        "NEAR_INTENTS_AGENT_API_KEY",
+        "OWNER_ACCOUNT_ID",
+        "OWNER_PUBLIC_KEY",
+        "OWNER_PRIVATE_KEY",
+        *extra,
+    )
 
 
 def client_for(env: dict, transport=None) -> AgentApi:
@@ -249,7 +197,7 @@ async def plan_command(env: dict, plan_path: Path = PLAN_PATH, transport=None) -
 
 
 async def create_command(env: dict, code: str, env_path: Path = ENV_PATH, transport=None) -> None:
-    require(env, "NEAR_INTENTS_AGENT_API_KEY", "OWNER_ACCOUNT_ID", "OWNER_PUBLIC_KEY", "OWNER_PRIVATE_KEY")
+    require_owner(env)
     if env.get("AGENT_ID"):
         raise SetupError("AGENT_ID zaten var, ikinci ajan olusturulmadi.")
     plan = load_plan(code)
@@ -278,7 +226,7 @@ async def create_command(env: dict, code: str, env_path: Path = ENV_PATH, transp
 
 
 async def grant_command(env: dict, code: str, env_path: Path = ENV_PATH, transport=None) -> None:
-    require(env, "NEAR_INTENTS_AGENT_API_KEY", "OWNER_ACCOUNT_ID", "OWNER_PUBLIC_KEY", "OWNER_PRIVATE_KEY", "AGENT_ID")
+    require_owner(env, "AGENT_ID")
     if env.get("GRANT_ID"):
         raise SetupError("GRANT_ID zaten var, ikinci yetki verilmedi.")
     load_plan(code)
@@ -302,12 +250,61 @@ async def grant_command(env: dict, code: str, env_path: Path = ENV_PATH, transpo
     print("GRANT_TOKEN .env dosyasina yazildi, ekrana basilmadi.")
 
 
+async def deposit_command(
+    env: dict, fresh: bool = False, env_path: Path = ENV_PATH, transport=None
+) -> dict:
+    """Get the one-time address for USDC on Base. It moves nothing by itself."""
+    require(env, "NEAR_INTENTS_AGENT_API_KEY", "AGENT_ID")
+    api = client_for(env, transport)
+    listing = await api.tokens()
+    token = pick_token(listing["data"], *FUNDING_TOKEN)
+    key = env.get("DEPOSIT_KEY")
+    if fresh or not key:
+        key = new_idempotency_key()
+        # Saved first: one key means one address, so a retry cannot make a second.
+        set_key(str(env_path), "DEPOSIT_KEY", key, quote_mode="never")
+    deposit = await api.deposit(env["AGENT_ID"], token["asset_id"], key)
+    details = deposit.get("details") or {}
+    address = details.get("deposit_address")
+    if not address:
+        raise SetupError("API adres vermedi. Hicbir yere para gonderme.")
+    print(f"Ag: Base. Token: USDC. Adres: {address}")
+    if details.get("memo"):
+        print(f"Not (memo): {details['memo']}")
+    minimum = Decimal(details.get("min_amount") or 0).scaleb(-token["decimals"])
+    print(f"En az: {minimum.normalize():f} USDC. Son tarih: {details.get('expires_at')}")
+    print(f"Takip kodu: {deposit.get('correlation_id')}")
+    return deposit
+
+
+async def balance_command(env: dict, transport=None) -> None:
+    require(env, "NEAR_INTENTS_AGENT_API_KEY", "AGENT_ID")
+    listing = await client_for(env, transport).balances(env["AGENT_ID"])
+    rows = listing.get("balances") or []
+    if not rows:
+        print("Ajanin bakiyesi yok.")
+    for row in rows:
+        print(f"{row.get('symbol')} ({row.get('blockchain')}): {row.get('balance')}")
+
+
 async def control_command(env: dict, kind: str, transport=None) -> None:
-    require(env, "NEAR_INTENTS_AGENT_API_KEY", "OWNER_ACCOUNT_ID", "OWNER_PUBLIC_KEY", "OWNER_PRIVATE_KEY", "AGENT_ID")
+    require_owner(env, "AGENT_ID")
     api = client_for(env, transport)
     intent = {"type": kind, "agent_id": env["AGENT_ID"]}
     await run_intent(api, intent, env, owner_from(env))
-    print("Ajan donduruldu." if kind == "agent_freeze" else "Ajan yeniden acildi.")
+    print("Ajan donduruldu." if kind == "agent_freeze" else "Ajan cozuldu.")
+
+
+async def unfreeze_command(env: dict, code: str, transport=None) -> None:
+    require_owner(env, "AGENT_ID")
+    expected = unfreeze_code(env)
+    if not code:
+        print("Ajan yeniden islem yapabilir hale gelecek. Politika degismez.")
+        print(f"Onay kodu: {expected}")
+        return
+    if code != expected:
+        raise SetupError("Onay kodu uymuyor. Hicbir sey imzalanmadi.")
+    await control_command(env, "agent_unfreeze", transport)
 
 
 async def run(args: argparse.Namespace) -> None:
@@ -319,21 +316,25 @@ async def run(args: argparse.Namespace) -> None:
         await create_command(env, args.onay)
     elif args.command == "grant":
         await grant_command(env, args.onay)
+    elif args.command == "deposit":
+        await deposit_command(env, args.yeni)
+    elif args.command == "balance":
+        await balance_command(env)
     elif args.command == "freeze":
-        if args.onay != "dondur":
-            raise SetupError("Dondurmak icin --onay=dondur yaz.")
         await control_command(env, "agent_freeze")
     else:
-        if args.onay != "ac":
-            raise SetupError("Acmak icin --onay=ac yaz.")
-        await control_command(env, "agent_unfreeze")
+        await unfreeze_command(env, args.onay)
 
 
 def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description="nearagent owner setup")
-    parser.add_argument("command", choices=["plan", "create", "grant", "freeze", "unfreeze"])
+    parser.add_argument(
+        "command",
+        choices=["plan", "create", "grant", "deposit", "balance", "freeze", "unfreeze"],
+    )
     parser.add_argument("--onay", default="")
+    parser.add_argument("--yeni", action="store_true", help="deposit: ask for a new address")
     args = parser.parse_args()
     try:
         asyncio.run(run(args))

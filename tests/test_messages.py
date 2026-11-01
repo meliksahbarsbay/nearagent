@@ -36,7 +36,14 @@ ERROR_KEYS = [
     "no_agent",
     "agent_read_failed",
     "policy_not_ready",
-    "freeze_manual",
+    "owner_key_missing",
+    "already_frozen",
+    "already_unfrozen",
+    "control_failed",
+    "control_pending",
+    "unfreeze_wait",
+    "code_wrong",
+    "code_locked",
 ]
 
 

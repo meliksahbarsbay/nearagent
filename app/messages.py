@@ -40,10 +40,21 @@ MESSAGES = {
         "policy_active": "Ajan çalışır durumda.",
         "budget_left": "Günlük bütçenden {left} dolar kaldı. Sınır {limit} dolar.",
         "budget_none": "Günlük bütçe sınırı yok. Sınır koymak için politikayı güncellemek gerekir.",
-        "freeze_manual": (
-            "Dondurma bu ekrana henüz bağlı değil, ajan dondurulmadı. "
-            "Terminalde sahip betiğindeki freeze komutunu çalıştır."
+        "owner_key_missing": "Sahip anahtarı bu bilgisayarda yok, imza atılamadı. Önce sahip kurulumunu tamamla.",
+        "freeze_done": "Ajan donduruldu, hiçbir işlem yapamaz. Açmak için ajanı çöz de.",
+        "unfreeze_done": "Ajan çözüldü, yeniden işlem yapabilir. Durdurmak için ajanı dondur de.",
+        "already_frozen": "Ajan zaten dondurulmuş. Açmak için ajanı çöz de.",
+        "already_unfrozen": "Ajan zaten çalışır durumda. Durdurmak için ajanı dondur de.",
+        "control_failed": "İşlem tamamlanmadı, ajanın durumu değişmedi. Yeniden dene ya da terminaldeki sahip betiğini kullan.",
+        "control_pending": "İstek gönderildi, ama sonuç henüz belli değil. Biraz sonra politikamı oku de.",
+        "unfreeze_wait": "Ajan şimdi çözülemez, ağın bekleme süresi dolmadı. Yaklaşık {minutes} dakika sonra yeniden dene.",
+        "unfreeze_plan": (
+            "Ajanı çözmek için sahip anahtarıyla imza atacağım. "
+            "Ajan yeniden işlem yapabilir hale gelir, politikası değişmez. "
+            "Onaylamak için şu kodu yaz: {code}. Vazgeçmek için hayır de."
         ),
+        "code_wrong": "Kod uymuyor. Kodu yeniden yaz ya da vazgeçmek için hayır de.",
+        "code_locked": "Kod üç kez yanlış girildi, hiçbir şey imzalanmadı. Yeniden denemek için ajanı çöz de.",
         "mode_dry": "Deneme modu.",
         "mode_live": "Canlı mod.",
         "live_on": "Canlı mod açık. Onay için evet yazman ya da Onayla düğmesine basman gerekir.",
@@ -112,10 +123,21 @@ MESSAGES = {
         "policy_active": "The agent is active.",
         "budget_left": "You have {left} dollars left of your daily budget. The cap is {limit} dollars.",
         "budget_none": "There is no daily budget cap. Setting one needs a policy update.",
-        "freeze_manual": (
-            "Freezing is not connected to this page yet, so the agent was not frozen. "
-            "Run the freeze command of the owner script in a terminal."
+        "owner_key_missing": "The owner key is not on this computer, so nothing was signed. Finish the owner setup first.",
+        "freeze_done": "The agent is frozen and can do nothing. To resume, say unfreeze the agent.",
+        "unfreeze_done": "The agent is unfrozen and can act again. To stop it, say freeze the agent.",
+        "already_frozen": "The agent is already frozen. To resume, say unfreeze the agent.",
+        "already_unfrozen": "The agent is already active. To stop it, say freeze the agent.",
+        "control_failed": "That did not complete, and the agent's state did not change. Try again or use the owner script in a terminal.",
+        "control_pending": "The request was sent, but the result is not known yet. Shortly, say read my policy.",
+        "unfreeze_wait": "The agent cannot be unfrozen yet, because the cooldown is still running. Try again in about {minutes} minutes.",
+        "unfreeze_plan": (
+            "To unfreeze the agent I will sign with the owner key. "
+            "The agent can act again, and its policy does not change. "
+            "To confirm, type this code: {code}. To stop, say no."
         ),
+        "code_wrong": "That code does not match. Type it again, or say no to stop.",
+        "code_locked": "The code was wrong three times, so nothing was signed. To try again, say unfreeze the agent.",
         "mode_dry": "Dry run.",
         "mode_live": "Live mode.",
         "live_on": "Live mode is on. To confirm, type yes or press the Confirm button.",

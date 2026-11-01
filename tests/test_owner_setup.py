@@ -10,6 +10,7 @@ import httpx
 import pytest
 from dotenv import dotenv_values
 
+import app.owner as owner_module
 import scripts.owner_setup as setup
 from app.agent_api import AgentApiError
 
@@ -110,7 +111,7 @@ def workspace(tmp_path, monkeypatch):
         signed.append(generated)
         return {"signature": "x"}
 
-    monkeypatch.setattr(setup, "sign", fake_sign)
+    monkeypatch.setattr(owner_module, "sign", fake_sign)
     return plan_path, env_path, signed
 
 
@@ -300,6 +301,98 @@ def test_freeze_sends_the_freeze_intent(workspace):
     assert len(signed) == 1
 
 
+def test_unfreeze_without_code_only_prints_the_code(workspace, capsys):
+    _, _, signed = workspace
+    chain = FakeChain()
+    env = {**ENV, "AGENT_ID": "agent-1"}
+    asyncio.run(setup.unfreeze_command(env, "", chain.transport))
+    assert setup.unfreeze_code(env) in capsys.readouterr().out
+    assert chain.requests == []
+    assert signed == []
+
+
+def test_unfreeze_with_wrong_code_signs_nothing(workspace):
+    _, _, signed = workspace
+    chain = FakeChain()
+    with pytest.raises(setup.SetupError):
+        asyncio.run(setup.unfreeze_command({**ENV, "AGENT_ID": "a"}, "wrong", chain.transport))
+    assert signed == []
+
+
+def test_unfreeze_with_the_code_signs(workspace):
+    _, _, signed = workspace
+    chain = FakeChain()
+    env = {**ENV, "AGENT_ID": "agent-1"}
+    asyncio.run(setup.unfreeze_command(env, setup.unfreeze_code(env), chain.transport))
+    generate = next(r for r in chain.requests if r.url.path == "/v1/generate-intent")
+    assert json.loads(generate.content)["type"] == "agent_unfreeze"
+    assert len(signed) == 1
+
+
+def test_unfreeze_code_belongs_to_one_agent():
+    first = setup.unfreeze_code({**ENV, "AGENT_ID": "agent-1"})
+    assert first != setup.unfreeze_code({**ENV, "AGENT_ID": "agent-2"})
+
+
+class FundingChain(FakeChain):
+    def __init__(self, address="0xdeposit"):
+        super().__init__()
+        self.address = address
+
+    def handle(self, request):
+        if request.url.path.endswith("/deposit"):
+            self.requests.append(request)
+            details = {"memo": None, "min_amount": "1000000", "expires_at": "soon"}
+            if self.address:
+                details["deposit_address"] = self.address
+            return httpx.Response(202, json={"correlation_id": "op_1", "details": details})
+        if request.url.path.endswith("/balances"):
+            self.requests.append(request)
+            rows = [{"symbol": "USDC", "blockchain": "base", "balance": "10"}]
+            return httpx.Response(200, json={"balances": rows})
+        return super().handle(request)
+
+
+def test_deposit_asks_for_usdc_on_base_and_keeps_its_key(workspace, capsys):
+    _, env_path, signed = workspace
+    chain = FundingChain()
+    env = {**ENV, "AGENT_ID": "agent-1"}
+    asyncio.run(setup.deposit_command(env, False, env_path, chain.transport))
+    request = next(r for r in chain.requests if r.url.path.endswith("/deposit"))
+    assert json.loads(request.content) == {"origin_asset": "usdc-base"}
+    key = dotenv_values(env_path)["DEPOSIT_KEY"]
+    assert request.headers["Idempotency-Key"] == key
+    assert "X-Grant-Token" not in request.headers
+    output = capsys.readouterr().out
+    assert "Ag: Base" in output and "0xdeposit" in output and "En az: 1 USDC" in output
+    assert signed == []
+
+
+def test_deposit_retry_reuses_the_key_unless_a_new_one_is_asked(workspace):
+    _, env_path, _ = workspace
+    chain = FundingChain()
+    env = {**ENV, "AGENT_ID": "agent-1", "DEPOSIT_KEY": "deposit-key-1"}
+    asyncio.run(setup.deposit_command(env, False, env_path, chain.transport))
+    asyncio.run(setup.deposit_command(env, True, env_path, chain.transport))
+    keys = [r.headers["Idempotency-Key"] for r in chain.requests if r.url.path.endswith("/deposit")]
+    assert keys[0] == "deposit-key-1"
+    assert keys[1] != "deposit-key-1"
+
+
+def test_deposit_without_an_address_says_send_nothing(workspace):
+    _, env_path, _ = workspace
+    chain = FundingChain(address=None)
+    env = {**ENV, "AGENT_ID": "agent-1"}
+    with pytest.raises(setup.SetupError, match="para gonderme"):
+        asyncio.run(setup.deposit_command(env, False, env_path, chain.transport))
+
+
+def test_balance_is_printed(workspace, capsys):
+    chain = FundingChain()
+    asyncio.run(setup.balance_command({**ENV, "AGENT_ID": "agent-1"}, chain.transport))
+    assert "USDC (base): 10" in capsys.readouterr().out
+
+
 def test_missing_settings_are_named_without_values():
     with pytest.raises(setup.SetupError) as raised:
         setup.require({"OWNER_PRIVATE_KEY": PRIVATE_KEY}, "OWNER_PRIVATE_KEY", "AGENT_ID")
@@ -325,9 +418,18 @@ def test_signer_timeout_sends_nothing(monkeypatch):
     def hang(*args, **kwargs):
         raise subprocess.TimeoutExpired("node", 45)
 
-    monkeypatch.setattr(setup.subprocess, "run", hang)
+    monkeypatch.setattr(owner_module.subprocess, "run", hang)
     with pytest.raises(setup.SetupError, match="zaman asimi"):
-        setup.sign({}, {"OWNER_PRIVATE_KEY": PRIVATE_KEY})
+        owner_module.sign({}, {"OWNER_PRIVATE_KEY": PRIVATE_KEY})
+
+
+def test_missing_node_sends_nothing(monkeypatch):
+    def missing(*args, **kwargs):
+        raise FileNotFoundError
+
+    monkeypatch.setattr(owner_module.subprocess, "run", missing)
+    with pytest.raises(setup.SetupError, match="Node"):
+        owner_module.sign({}, {"OWNER_PRIVATE_KEY": PRIVATE_KEY})
 
 
 def test_the_real_env_file_is_ignored_by_git():

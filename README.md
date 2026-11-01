@@ -23,7 +23,9 @@ Swap interfaces are visual: charts, popups, and icon-only buttons. A blind user 
 - Voice input through the browser's Web Speech API. It uses Turkish or English to match the page, announces `Dinliyorum` and `Anladım: ...`, and writes what it heard into the text box. It never sends by itself: you check the text and press Enter.
 - An Advanced section keeps a field-based form, `POST /api/quote`, which works with no keys.
 - Dry mode by default. The code cannot execute a swap today, so a confirmation only replies `Deneme modu: işlem yapılmadı.`
-- Agent commands, typed or spoken: `politikamı oku`, `bütçem ne kadar kaldı`, and `ajanı dondur`, or `read my policy`, `how much budget is left`, and `freeze the agent`. With no agent they reply `Ajan cüzdanı kurulmadı`. Freezing is not connected to the page yet, so `ajanı dondur` says so and points to the owner script.
+- Agent commands, typed or spoken: `politikamı oku`, `bütçem ne kadar kaldı`, `ajanı dondur`, and `ajanı çöz`, or `read my policy`, `how much budget is left`, `freeze the agent`, and `unfreeze the agent`. With no agent they reply `Ajan cüzdanı kurulmadı`.
+- `ajanı dondur` is the emergency stop. It takes one step, needs no language model, and cuts through any open question, so the command itself is the owner's approval. It signs with the owner key and reports success only after the API confirms it.
+- `ajanı çöz` signs nothing at first. It says what would happen and gives a six digit code, and only that code signs. Enter and `evet` do not. Three wrong codes end the attempt.
 - A live mode switch in the Advanced section. It stays off with the reply `Canlı mod için ajan cüzdanı kurulmadı` unless the Agent API key, `AGENT_ID`, and `GRANT_TOKEN` are all set.
 - In live mode, Enter alone never confirms. You must type `evet` or `yes`, or press a separate Confirm button. Execution is still not connected, so even a live confirmation replies that no funds moved.
 
@@ -31,20 +33,30 @@ Swap interfaces are visual: charts, popups, and icon-only buttons. A blind user 
 
 - Live execution through a policy-bound Agent API wallet. It is mainnet only and uses real funds, so it will stay off by default, use a separate account with small amounts, and require explicit user confirmation for every action. `app/agent_api.py` is the client for it, written from the Agent API docs and tested against a mock. It has never made a real authenticated call, and `app/main.py` does not use its money methods.
 
-## Owner setup
+## Live mode: off until funded
 
-This needs real funds on NEAR mainnet, and nothing here has been run against it yet. It needs Node 20 or later, because signing uses `near-api-js`.
+Live mode is off, and it stays off until the agent is funded. No agent exists yet, no real funds are held, and nothing here has run against NEAR mainnet. Funding alone does not turn on swaps: execution still has to be connected, and that is a separate step.
 
-```sh
-cd scripts/owner
-npm ci --ignore-scripts
-cd ../..
-node scripts/owner/generate_key.mjs
-```
+Funding uses real money and needs two transfers, about 0.1 NEAR and about 10 USDC:
 
-The generator writes a new ed25519 key to `.env`, which must be ignored by git, and prints only the owner's implicit account address. It refuses to replace an existing key. There is no recovery for a lost owner key, so back it up. The account appears on chain when it receives its first transfer of NEAR.
+1. Get a partner API key from https://partners.near-intents.org and add it to `.env` as `NEAR_INTENTS_AGENT_API_KEY`.
+2. Install the signer and create the owner key. This needs Node 20 or later:
 
-`python scripts/owner_setup.py plan` prints the rules and a code, and signs nothing. `create --onay=CODE` and `grant --onay=CODE` sign only those saved rules, and stop if the API prepared anything different. `freeze --onay=dondur` stops the agent, and `unfreeze --onay=ac` starts it again.
+   ```sh
+   cd scripts/owner
+   npm ci --ignore-scripts
+   cd ../..
+   node scripts/owner/generate_key.mjs
+   ```
+
+   It writes a new ed25519 key to `.env`, which must be ignored by git, and prints only the owner's implicit account address. It refuses to replace an existing key. There is no recovery for a lost owner key, so back it up.
+3. Send 0.1 NEAR to that owner address. The account appears on chain with its first transfer. The 0.1 follows the NEAR docs' example, and is not a required minimum.
+4. Run `python scripts/owner_setup.py plan`. It prints the rules and a code, and signs nothing.
+5. Run `python scripts/owner_setup.py create --onay=CODE`, then `grant --onay=CODE`. They sign only the saved rules, and stop if the API prepared anything different. The plan is valid for one hour.
+6. Run `python scripts/owner_setup.py deposit`. It prints a one-time address. Send about 10 USDC to it on the Base network, and only to that address. A repeat run shows the same address, and `--yeni` asks for a new one.
+7. Run `python scripts/owner_setup.py balance` to see the funds arrive.
+
+`freeze` stops the agent from a terminal, in one step. `unfreeze` prints a code, and `unfreeze --onay=CODE` signs. Unfreezing has a 10 minute cooldown on the API's side. Freezing has none.
 
 The rules: swap, plus withdraw only to the owner's address, for USDC on NEAR and Base, wNEAR, SOL, and ETH, with 10 dollars a day and 10 actions an hour. The API has no per-transaction dollar cap, so the 5 dollar cap is converted to token amounts at the prices when the plan was made. If a token's price rises, that cap rises in dollars. The daily cap stays in dollars.
 
@@ -56,29 +68,33 @@ The signing approach follows the Agent API documentation and its examples. That 
 - NEAR Intents 1Click API supplies token data, prices, and quotes.
 - Dry and live quotes share one code path, and both use `INTENTS` for `depositType`, `refundType`, and `recipientType`. Only the `dry` flag differs.
 
-## Run it
+## Run it in 5 minutes
 
-Requires Python 3.10 or later.
+Dry mode needs no wallet, no funds, and no keys. It moves no money. It needs Python 3.10 or later.
 
-```sh
-git clone https://github.com/meliksahbarsbay/nearagent.git
-cd nearagent
-python -m venv .venv
-```
+1. Do: get the code and install it.
 
-Activate on macOS or Linux: `source .venv/bin/activate`
+   ```sh
+   git clone https://github.com/meliksahbarsbay/nearagent.git
+   cd nearagent
+   python -m venv .venv
+   ```
 
-Activate on Windows PowerShell: `.venv\Scripts\Activate.ps1`
+   Activate on macOS or Linux: `source .venv/bin/activate`
 
-```sh
-python -m pip install -r requirements.txt
-```
+   Activate on Windows PowerShell: `.venv\Scripts\Activate.ps1`
 
-Sentences need a key. Copy `.env.example` to `.env`, then set `NEAR_AI_API_KEY` or `OPENAI_API_KEY`. Without a key, the text box says parsing is off and the Advanced form still works.
+   ```sh
+   python -m pip install -r requirements.txt
+   ```
 
-```sh
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
-```
+2. Do: run `python -m pytest -q`. See: all tests pass, with no network calls.
+3. Do: run `python -m uvicorn app.main:app --host 127.0.0.1 --port 8000`, and open http://127.0.0.1:8000.
+4. Do: press Tab until you reach the `Gelişmiş` section, press Enter to open it, Tab to `Deneme teklifi al`, and press Enter. See: a real dry quote for 1 wNEAR to USDC read in fixed order, ending with `Onaylıyor musun?` This uses the public 1Click API.
+5. Do: press Enter on the empty text box. See: `Deneme modu: işlem yapılmadı.`
+6. Do: type `ajanı dondur` and press Enter. See: `Ajan cüzdanı kurulmadı. Kurulum bitince yeniden dene.`
+
+Sentences such as `1 SOL kaç dolar` need a key. Copy `.env.example` to `.env`, set `NEAR_AI_API_KEY` or `OPENAI_API_KEY`, and restart. Without a key, the text box says parsing is off and the form still works.
 
 ## Try it: do X, see Y
 
@@ -94,7 +110,7 @@ Prices below are examples, so your numbers will differ. Steps 3 to 10 and step 1
 8. Do: type `swap 2 NEAR to USDC` and press Enter, then Tab to the first `Copy` button and press Enter. See: `Copied.` Press Esc to cancel the quote.
 9. Do: type `merhaba` and press Enter. See: a short Turkish help message. Then press Alt+H. See: how to use the page and its shortcuts.
 10. Do: type `5 ABCD'yi SOL'a çevir` and press Enter. See: `ABCD tokenini bulamadım. Token adını kontrol edip yeniden yaz.`
-11. Do: type `politikamı oku` and press Enter, then do the same with `bütçem ne kadar kaldı` and `ajanı dondur`. See: `Ajan cüzdanı kurulmadı. Kurulum bitince yeniden dene.` each time. This step needs no key.
+11. Do: type `politikamı oku` and press Enter, then do the same with `bütçem ne kadar kaldı`, `ajanı dondur`, and `ajanı çöz`. See: `Ajan cüzdanı kurulmadı. Kurulum bitince yeniden dene.` each time. This step needs no key.
 12. Do: in Chrome or Edge, press Alt+M and allow the microphone, then say `bir SOL kaç dolar`. See: `Dinliyorum`, then `Anladım: ...`, and the text in the box. Nothing is sent until you press Enter.
 13. Do: Tab to the Advanced section and press Enter to open it, then press Enter on the `Canlı mod` button. See: `Canlı mod için ajan cüzdanı kurulmadı. Deneme modunda devam edebilirsin.` This step needs no key.
 14. Do: Tab to the submit button in the Advanced section and press Enter. See: a dry quote from the field-based form, with focus back in the text box for your answer. This step needs no key.
@@ -128,7 +144,9 @@ NEAR AI Cloud has not been measured on this set yet.
 - Tests cover the server. The page's keyboard behaviour was checked by hand in Chrome.
 - Voice recognition was checked with a stand-in recognizer, not a real microphone. Chrome and Edge may send audio to their own speech service, unlike sentence parsing on NEAR AI Cloud.
 - Voice input follows the page language, so an English sentence on a Turkish page may be misheard. Change the language in the Advanced section first.
-- Owner signing happens in a wallet in the browser. This app has no wallet step yet, so setting up an agent needs separate tooling.
+- Owner signing runs from a key in `.env`, not a wallet. Keep only a small amount in a dedicated owner account.
+- Freezing and unfreezing were tested with the real signer against a local stand-in API, not the real Agent API. Real timing will be slower. If the result takes more than about 30 seconds, the page says it is not known yet and never claims success.
+- A spoken `ajanı dondur` still needs Enter, because voice input never sends by itself.
 
 ## NVDA ile doğrulanacaklar
 

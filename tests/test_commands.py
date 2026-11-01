@@ -81,6 +81,14 @@ def ask(client, text):
         ("ajanı hemen dondur", ("freeze", "tr")),
         ("freeze the agent", ("freeze", "en")),
         ("emergency stop", ("freeze", "en")),
+        ("ajanı acil durdur", ("freeze", "tr")),
+        ("acil durdur", ("freeze", "tr")),
+        ("ajanı çöz", ("unfreeze", "tr")),
+        ("Ajanı çöz.", ("unfreeze", "tr")),
+        ("ajanı aç", ("unfreeze", "tr")),
+        ("dondurmayı kaldır", ("unfreeze", "tr")),
+        ("ajanın dondurmasını kaldır", ("unfreeze", "tr")),
+        ("unfreeze the agent", ("unfreeze", "en")),
     ],
 )
 def test_commands_are_recognized(text, expected):
@@ -103,7 +111,7 @@ def test_ordinary_sentences_are_not_commands(text):
 
 
 @pytest.mark.parametrize(
-    "text", ["politikamı oku", "bütçem ne kadar kaldı", "ajanı dondur"]
+    "text", ["politikamı oku", "bütçem ne kadar kaldı", "ajanı dondur", "ajanı çöz"]
 )
 def test_no_agent_is_said_plainly(no_agent, no_parser, text):
     client, sent = make_client()
@@ -184,17 +192,6 @@ def test_remaining_budget_rounds_down():
 def test_no_daily_cap():
     data = {"usage": {"budget": {"daily": {"limit_usd": None}}}}
     assert say_budget(data, "tr").startswith("Günlük bütçe sınırı yok.")
-
-
-def test_freeze_says_it_did_not_freeze(agent, no_parser, monkeypatch):
-    async def fail():
-        raise AssertionError("freeze must not read or write anything here")
-
-    monkeypatch.setattr(main, "read_agent_policy", fail)
-    client, sent = make_client()
-    data = ask(client, "ajanı dondur")
-    assert "ajan dondurulmadı" in data["spoken"]
-    assert sent == []
 
 
 def test_read_failure_is_spoken_without_a_code(agent, no_parser, monkeypatch):

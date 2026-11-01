@@ -13,6 +13,7 @@ from typing import Literal
 from app.oneclick import QUOTE_TTL_MINUTES
 
 MAX_OPEN = 1000
+CODE_DIGITS = 6
 
 YES_WORDS = {"evet", "onayla", "onayliyorum", "yes", "confirm"}
 NO_WORDS = {"hayir", "iptal", "vazgec", "vazgectim", "no", "cancel"}
@@ -74,20 +75,39 @@ def read_amount(text: str, from_token: str) -> str | None:
     return match[1]
 
 
+def new_code() -> str:
+    """A six digit code, read digit by digit, that only a deliberate answer can match."""
+    return "".join(secrets.choice(string.digits) for _ in range(CODE_DIGITS))
+
+
+def code_matches(text: str, code: str) -> bool:
+    """Spaces are allowed, because speech input may write 1 2 3 4 5 6."""
+    return secrets.compare_digest(re.sub(r"\D", "", text), code)
+
+
 @dataclass
 class Pending:
-    kind: Literal["amount", "large", "confirm"]
+    kind: Literal["amount", "large", "confirm", "unfreeze"]
     lang: str
     swap: dict = field(default_factory=dict)
     expires_at: float = 0.0
     live: bool = False
+    code: str = ""
+    attempts: int = 0
 
 
 class PendingStore:
     def __init__(self):
         self._items: dict[str, Pending] = {}
 
-    def add(self, kind: str, lang: str, swap: dict | None = None, live: bool = False) -> str:
+    def add(
+        self,
+        kind: str,
+        lang: str,
+        swap: dict | None = None,
+        live: bool = False,
+        code: str = "",
+    ) -> str:
         now = time.monotonic()
         self._items = {k: v for k, v in self._items.items() if v.expires_at > now}
         # Dicts keep insertion order, so the first key is the oldest question.
@@ -95,7 +115,7 @@ class PendingStore:
             del self._items[next(iter(self._items))]
         key = secrets.token_urlsafe(16)
         expires_at = now + QUOTE_TTL_MINUTES * 60
-        self._items[key] = Pending(kind, lang, swap or {}, expires_at, live)
+        self._items[key] = Pending(kind, lang, swap or {}, expires_at, live, code)
         return key
 
     def get(self, key: str) -> Pending | None:
