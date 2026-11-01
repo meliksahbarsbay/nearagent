@@ -59,7 +59,7 @@ The app's limits sit on top of the owner's signed policy. `MAX_LIVE_USD` caps on
 
 ### Funding
 
-`docs/funding.md` has the full numbered steps in Turkish. The order matters: NEAR first, because the owner account must exist before it signs, and USDC last, because the deposit address exists only after the agent does. The app has no withdraw command yet, so funds cannot be sent back from the agent through it.
+`docs/funding.md` has the full numbered steps in Turkish. The order matters: NEAR first, because the owner account must exist before it signs, and USDC last, because the deposit address exists only after the agent does.
 
 Funding uses real money and needs two transfers, about 0.1 NEAR and about 10 USDC:
 
@@ -82,6 +82,14 @@ Funding uses real money and needs two transfers, about 0.1 NEAR and about 10 USD
 8. Set `LIVE_ENABLED=true` in `.env` and restart the app. Only do this for the first real swap, after the owner approves it.
 
 `freeze` stops the agent from a terminal, in one step. `unfreeze` prints a code, and `unfreeze --onay=CODE` signs. Unfreezing has a 10 minute cooldown on the API's side. Freezing has none.
+
+### Withdrawing
+
+Funds can leave only to the owner address, which is read from the signed policy. A sentence that names any address is refused. With live mode on, `paramı cüzdanıma çek`, `hepsini USDC çek`, or `withdraw 2 USDC` reads what would leave, where it goes, and what it takes from the daily budget, then waits for a typed `evet` or the Confirm button. It checks everything again before sending, and follows the result like a swap.
+
+From a terminal, `python scripts/owner_setup.py withdraw --ne "hepsini USDC"` shows the same terms and a code, and `--onay=CODE` sends. The code belongs to that exact amount.
+
+Withdrawals count against the daily budget and the per-transaction limit, so 10 USDC needs two withdrawals. `hepsini` stops at the limit and says so. Funds arrive on the owner's NEAR account, and moving them on from there needs a NEAR wallet. This has only run against a stand-in API.
 
 The rules: swap, plus withdraw only to the owner's address, for USDC on NEAR and Base, wNEAR, SOL, and ETH, with 10 dollars a day and 10 actions an hour. The API has no per-transaction dollar cap, so the 5 dollar cap is converted to token amounts at the prices when the plan was made. If a token's price rises, that cap rises in dollars. The daily cap stays in dollars.
 

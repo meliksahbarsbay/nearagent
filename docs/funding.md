@@ -9,10 +9,6 @@ Bu adımlar gerçek para kullanır ve NEAR mainnet üzerinde çalışır. Hiçbi
 - Sıra: önce NEAR, en son USDC. USDC adresi ancak ajan kurulduktan sonra alınabilir.
 - Ajan adresi tek kullanımlıktır. USDC'yi başka bir adrese ya da başka bir ağdan gönderme.
 
-## Başlamadan önce
-
-**Para geri çekme komutu henüz yok.** Politika sahip adresine `withdraw` izni veriyor, ama `scripts/owner_setup.py` ve uygulama bu işlemi yapamıyor. 10 USDC'yi yatırmadan önce bu komutun eklenmesi önerilir. Ajan silinirse içindeki bakiye yok olur.
-
 ## Adımlar
 
 Komutları proje klasöründe çalıştır. Claude Code içinden çalıştıracaksan başına `!` koy.
@@ -71,6 +67,34 @@ Komutları proje klasöründe çalıştır. Claude Code içinden çalıştıraca
 
 13. Canlı modu aç: `.env` dosyasına `LIVE_ENABLED=true` ekle, uygulamayı yeniden başlat, Gelişmiş bölümünden `Canlı mod` düğmesine bas.
 14. İlk takası küçük yap, örneğin 1 USDC. Sınırlar: işlem başına 5 dolar, günde 10 dolar.
+
+## Parayı geri çekme
+
+Para yalnızca sahip adresine gider. Bu adres imzalanan politikadan okunur, başka adres kabul edilmez. Çekim gerçek para kullanır ve hiç denenmedi, ilk gerçek çekim senin onayınla yapılacak.
+
+Sayfadan:
+
+1. Gelişmiş bölümünden `Canlı mod` düğmesine bas.
+2. `paramı cüzdanıma çek`, `hepsini USDC çek` ya da `2 USDC'yi cüzdanıma çek` yaz, Enter'a bas. Ne çekileceği, nereye gideceği ve bütçeden ne kadar düşeceği okunur.
+3. `evet` yaz ya da Onayla düğmesine bas. Enter tek başına onay sayılmaz.
+
+Terminalden, `LIVE_ENABLED` gerekmez:
+
+```
+.venv\Scripts\python scripts\owner_setup.py withdraw --ne "hepsini USDC"
+.venv\Scripts\python scripts\owner_setup.py withdraw --ne "hepsini USDC" --onay=KOD
+```
+
+İlk komut hiçbir şey göndermez, ne çekileceğini ve onay kodunu gösterir. Kod o tutara özeldir. Tutar değişirse kod çalışmaz.
+
+## Çekim sınırları
+
+- Çekim günlük 10 dolarlık bütçeden düşer. Bütçe yetmezse `bugün çekilemez, yarın tekrar dene` denir.
+- İşlem başına sınır çekimlere de uygulanır, yani yaklaşık 5 dolar. 10 USDC tek seferde çekilemez. `hepsini çek` sınıra iner ve bunu söyler, kalan için komutu yeniden çalıştırırsın.
+- Aynı gün takas da yaptıysan bütçe erken biter, kalanı ertesi güne kalır.
+- Önizleme hakkı günde 20. Her çekim 2 önizleme kullanır.
+- Birden çok token varsa hangisini istediğini söylemen gerekir. Tek komut bütün tokenleri çekmez.
+- Çekilen para NEAR ağındaki sahip hesabına gelir. Base USDC, NEAR üzerindeki USDC olarak gelir. Oradan Binance'e göndermek için bu projede bir komut yok. Sahip anahtarını bir NEAR cüzdanına aktarman gerekir.
 
 ## Sınırlar
 
