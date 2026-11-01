@@ -129,9 +129,9 @@ Dry mode needs no wallet, no funds, and no keys. It moves no money. It needs Pyt
 
 2. Do: run `python -m pytest -q`. See: all tests pass with no network calls. One signer test is skipped until the Node tools are installed.
 3. Do: run `python -m uvicorn app.main:app --host 127.0.0.1 --port 8000`, and open http://127.0.0.1:8000.
-4. Do: press Tab until you reach the `Gelişmiş` section, press Enter to open it, Tab to `Deneme teklifi al`, and press Enter. See: a real dry quote for 1 wNEAR to USDC read in fixed order, ending with `Onaylıyor musun?` This uses the public 1Click API.
-5. Do: press Enter on the empty text box. See: `Deneme modu: işlem yapılmadı.`
-6. Do: type `ajanı dondur` and press Enter. See: `Ajan cüzdanı kurulmadı. Kurulum bitince yeniden dene.`
+4. Do: press Tab until you reach the `Advanced` section (`Gelişmiş` on a Turkish browser), press Enter to open it, Tab to `Get dry-run quote` (`Deneme teklifi al`), and press Enter. See: a real dry quote for 1 wNEAR to USDC read in fixed order, ending with `Do you confirm?` (`Onaylıyor musun?`). This uses the public 1Click API.
+5. Do: press Enter on the empty text box. See: `Dry run: nothing was executed.` (`Deneme modu: işlem yapılmadı.`)
+6. Do: type `freeze the agent` (`ajanı dondur`) and press Enter. See: `The agent wallet is not set up. Try again after setup.` (`Ajan cüzdanı kurulmadı. Kurulum bitince yeniden dene.`)
 
 Sentences such as `1 SOL kaç dolar` need a key. Copy `.env.example` to `.env`, set `NEAR_AI_API_KEY` or `OPENAI_API_KEY`, and restart. Without a key, the text box says parsing is off and the form still works.
 
@@ -190,7 +190,7 @@ NEAR AI Cloud has not been measured on this set yet.
 - Open questions live in server memory, so a restart ends them and the page says the quote expired.
 - Tests cover the server. The page's keyboard behaviour was checked by hand in Chrome.
 - Voice recognition was checked with a stand-in recognizer, not a real microphone. Chrome and Edge may send audio to their own speech service, unlike sentence parsing on NEAR AI Cloud.
-- Voice input follows the page language, so an English sentence on a Turkish page may be misheard. Change the language in the Advanced section first.
+- Voice input follows the page language, so an English sentence on a Turkish page may be misheard. Change the language menu below the text box first.
 - Owner signing runs from a key in `.env`, not a wallet. Keep only a small amount in a dedicated owner account.
 - Freezing and unfreezing were tested with the real signer against a local stand-in API, not the real Agent API. Real timing will be slower. If the result takes more than about 30 seconds, the page says it is not known yet and never claims success.
 - A spoken `ajanı dondur` still needs Enter, because voice input never sends by itself.

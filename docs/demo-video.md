@@ -20,10 +20,11 @@ Herkese açık demo yoksa bu video zorunlu hale gelir. Hakemler demoyu açamıyo
 
 ## Çekimden önce
 
-- Sahne 3 şu an çekilemez. Bu projede ajan kurulu değil, `.env` içinde yalnızca `OPENAI_API_KEY` var. Komut bugün `Ajan cüzdanı kurulmadı` der. Önce README'deki fonlama adımlarını bitir. Bu adımlar gerçek para ister: yaklaşık 0,1 NEAR ve 10 USDC.
+- Sahne 3 şu an çekilemez. Bu projede ajan kurulu değil, `.env` içinde yalnızca `OPENAI_API_KEY` var. Komut bugün `Ajan cüzdanı kurulmadı` der. Önce `docs/funding.md` adımlarını bitir. Bu adımlar gerçek para ister: 0,1 NEAR ve 5 USDC.
 - Sahne 3'ü lokalde çek: `python -m uvicorn app.main:app --host 127.0.0.1 --port 8000`. Herkese açık adres ajan komutlarını çalıştırmaz.
 - Sahneler 1 ve 2 için de aynı lokal uygulamayı kullan. Böylece tek seferde çekilir.
 - Fiyatlar değişir. Aşağıdaki `...` yerleri kayıtta gerçek değerle dolar.
+- Sayfa tarayıcı diliyle açılır. Dili metin kutusunun altındaki menüden değiştirebilirsin. Sesli giriş sayfa dilinde dinler.
 - Yalnızca tarayıcı penceresini kaydet. Terminal ve `.env` görünmesin.
 - NVDA hızını biraz artır. Teklif cümlesi uzundur, sahne 1'in süresini belirler.
 - Kulaklık tak. Hoparlörden çıkan NVDA sesi mikrofona girebilir.
@@ -89,7 +90,7 @@ Ekranda: Proje adı, demo adresi, GitHub adresi ve `Ücret, alacağın tutardan 
 
 ## English script
 
-Replies follow the language of the sentence, but voice input follows the page language. Before recording, open the Advanced section and set the language to English.
+Replies follow the language of the sentence, but voice input follows the page language. Before recording, set the language menu below the text box to English. A browser set to English already opens that way.
 
 ### Scene 1: Keyboard swap with NVDA, dry mode (0:00 - 0:55)
 

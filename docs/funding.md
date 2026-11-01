@@ -95,7 +95,7 @@ Doküman, NEAR'ın sahip hesabına her zaman native NEAR olarak ulaştığını 
     ```
 
 18. Binance'te Yatır ekranını aç, NEAR seç, ağ olarak NEAR Protocol seç, adresi kopyala.
-19. **Binance memo ya da tag gösteriyorsa dur, gönderme.** NEAR transferinin memo alanı yoktur. Memosuz gönderim Binance'te kaybolabilir. Önce Binance desteğine sor.
+19. Memo kontrolü: kontrol edildi, 1 Kasım 2026: memo yok, 64 haneli implicit adres, minimum 0.001 NEAR; yine de göndermeden önce ekrana bir kez bak. Ekranda memo ya da tag görürsen dur, gönderme, çünkü NEAR transferinin memo alanı yoktur.
 20. Koşulları gör ve onay kodu al. Bu adım hiçbir şey göndermez:
 
     ```
@@ -120,7 +120,7 @@ Doküman, NEAR'ın sahip hesabına her zaman native NEAR olarak ulaştığını 
 - Çekim önizlemesi günde 20 ile sınırlıdır, her çekim 2 tane kullanır.
 - Sayfadan çekim için canlı modun açık olması gerekir. Terminal çekimi canlı mod istemez.
 - USDC'yi doğrudan sahip hesabına çekme. Bu token oradan Binance'e gönderilemez, kayıt gerekip gerekmediği de belgede yok. Uygulama bunu okurken uyarır.
-- Binance'in NEAR yatırma için memo isteyip istemediğini ve en az tutarını doğrulayamadım. Doğru bilgi Binance ekranındadır.
+- Binance'in NEAR yatırma ekranı 1 Kasım 2026'da kontrol edildi. Bu bilgi değişebilir, doğru bilgi Binance ekranındadır.
 
 ## Sınırlar
 

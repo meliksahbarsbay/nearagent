@@ -45,26 +45,26 @@ Başka alan ekleme. Özellikle `website` alanı dolu giderse başvuru spam sayı
 Her track için dürüst değerlendirmem:
 
 - `open`: uyuyor. Erişilebilirlik başka bir kategoriye tam oturmuyor.
-- `security`: uyuyor. Politika okuma, bütçe sınırı ve tek adımda dondurma bu track'in konusu. Ama gerçek Agent API ile henüz denenmedi.
-- `agents`: zayıf. Bu track kazanan, harcayan ve pazarlık eden ajanlar istiyor. Bizim ajanımız henüz işlem yapmıyor.
-- `realworld`: zayıf. Bu track maaş, fatura ve ödeme gibi bir şirketin yarın kullanacağı şeyler istiyor. Bizde deneme modu var.
+- `security`: uyuyor. Politika okuma, bütçe sınırı ve tek adımda dondurma bu track'in konusu. Ama gerçek Agent API ile henüz denenmedi, yalnızca sahte API ile test edildi.
+- `agents`: zayıf. Bu track kazanan, harcayan ve pazarlık eden ajanlar istiyor. Bizim ajanımızın takas ve çekim kodu var, ama gerçek ağda hiç işlem yapmadı.
+- `realworld`: zayıf. Bu track maaş, fatura ve ödeme gibi bir şirketin yarın kullanacağı şeyler istiyor. Bizde kod hazır, ama yalnızca deneme modu gerçek serviste çalıştı.
 - `privacy`: şimdilik ekleme. Kod NEAR AI Cloud'u önce deniyor, ama `.env` içinde NEAR AI anahtarı yok, cümleler şu an OpenAI'a gidiyor. Anahtarı ekleyip test setini NEAR AI ile de çalıştırırsan ekle. Kredi için https://cloud.near.ai adresine bak. NEAR Builders'a katılınca 10 dolar kredi veriliyor.
-- `defi`: istemediğin ama düşünmeye değer bir seçenek. NEAR Intents üzerinden takas teklifi verdiği için `agents` ve `realworld`'den daha yakın. Ama bu track de çalışan takas bekliyor, bizde hâlâ deneme modu var.
+- `defi`: istemediğin ama düşünmeye değer bir seçenek. NEAR Intents üzerinden takas teklifi verdiği için `agents` ve `realworld`'den daha yakın. Ama bu track de çalışan takas bekliyor, bizim canlı takasımız gerçek ağda denenmedi.
 
 ## idea
 
-Metin 1448 karakter. Sınır 20 ile 2000 arası.
+Metin 1593 karakter. Sınır 20 ile 2000 arası.
 
 Swap interfaces are visual: charts, popups, and icon-only buttons. A blind user on a screen reader often cannot tell what a swap will cost or what they will receive.
 
 nearagent is an accessibility-first crypto assistant for NEAR Intents. It has one text box. You type or say a sentence in Turkish or English, such as "swap 2 NEAR to USDC", and it answers in short sentences that a screen reader reads aloud. Every quote is read in one fixed order: what you give, what you get, the guaranteed minimum, the fee, the time, and how long the quote is valid. Every step works from the keyboard. A confirmation is held on the server, works once, and expires with its quote. Amounts above 100 dollars are spelled out and confirmed first.
 
-How NEAR fits in: NEAR Intents 1Click supplies token data, prices, and quotes, so one sentence can price a swap across chains with no bridge screens. An Agent API client, owner signing tools, and spoken commands are built for a policy-bound wallet: read the policy, check the daily budget, freeze the agent in one step, and unfreeze only with a six digit code. The parser is built to try NEAR AI Cloud first, with OpenAI as the fallback.
+How NEAR fits in: NEAR Intents 1Click supplies token data, prices, and quotes in dry mode, so one sentence can price a swap across chains with no bridge screens. The NEAR Intents Agent API is built in for a policy-bound wallet: live swaps, withdrawals only to the owner's address, a daily budget, freezing in one step, and unfreezing only with a six digit code. A separate script sends NEAR from the owner account. The parser is built to try NEAR AI Cloud first, with OpenAI as the fallback.
 
-Current status: the project runs in dry mode and cannot execute a swap, so no funds move. No agent is funded yet, and freezing was tested against a local stand-in API, not the real Agent API. Parsing has been measured with OpenAI only, on a test set that also shaped the prompt.
+Current status: dry mode is the default and works with the real 1Click API. Live swaps, withdrawals, freezing, and the NEAR send script are built, but they have only been tested against a local stand-in API and a fake RPC. None has run on a real network, and no agent is funded yet. Parsing has been measured with OpenAI only, on a test set that also shaped the prompt.
 
 ## idea metnini ne zaman değiştirmelisin
 
 - Ajanı kurup fonlarsan son paragraftaki ajan cümlesini güncelle.
 - NEAR AI Cloud'u ölçersen son cümleyi güncelle ve `privacy` track'ini ekle.
-- Canlı takas bağlanırsa dry mode cümlesini güncelle.
+- Gerçek ağda bir takas, çekim ya da dondurma yaparsan yalnızca gerçekten denediğini yaz. Denenmeyeni denenmiş gösterme.

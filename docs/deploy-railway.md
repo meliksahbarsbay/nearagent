@@ -2,7 +2,7 @@
 
 Bu dosya herkese açık demo içindir. Henüz deploy yapılmadı.
 
-Yeni ve ayrı bir Railway projesi aç. ResLobby projelerini kullanma.
+Yeni ve ayrı bir Railway projesi aç. Başka projelerinle paylaşma.
 
 ## Nasıl çalışır
 
@@ -48,3 +48,4 @@ Bu şart. Uygulamada `ajanı dondur` komutu onay istemez. Anahtarlar sunucuda ka
 - Railway `X-Real-IP` başlığını kendi yazıyor, ama bunu sözleşmeyle garanti etmiyor. Bazı kullanıcılar CDN katmanında IP'nin yanlış geldiğini bildirdi. O durumda birçok ziyaretçi aynı sınırı paylaşır. Harcama sınırı IP'ye bağlı olmadığı için bundan etkilenmez.
 - Servise özel ağdan ya da TCP proxy ile erişim açma. O yollarda başlık taklit edilebilir.
 - Herkese açık demoda ajan komutları `Ajan cüzdanı kurulmadı` der. Video sahne 3 bu yüzden lokalde çekilir.
+- Herkese açık demoda canlı mod kapalıdır ve işlem geçmişi tutulmaz, çünkü ziyaretçiler aynı dosyayı paylaşırdı.
