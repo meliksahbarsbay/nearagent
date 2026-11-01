@@ -1,8 +1,7 @@
 """Client for the NEAR Intents Agent API, written from its docs and OpenAPI file.
 
-Mainnet only, with real funds. The app uses only live_ready(), agent_ready(), and
-read_agent_policy(), which holds no grant token, so no app path here can move funds today.
-scripts/owner_setup.py uses the rest, and only when the owner runs it.
+Mainnet only, with real funds. app/live.py is the only app file that uses the money
+methods. scripts/owner_setup.py uses the rest, and only when the owner runs it.
 
 Docs: https://docs.agentsonintents.com/integration/agent-api/
 """
@@ -89,9 +88,10 @@ def live_settings() -> LiveSettings:
 
 
 def live_ready() -> bool:
-    """Live mode needs all three: a key alone cannot act for an agent."""
+    """Off unless switched on on purpose, and a key alone cannot act for an agent."""
     settings = live_settings()
-    return bool(settings.api_key and settings.agent_id and settings.grant_token)
+    enabled = os.getenv("LIVE_ENABLED", "").strip().lower() == "true"
+    return enabled and bool(settings.api_key and settings.agent_id and settings.grant_token)
 
 
 def agent_ready() -> bool:

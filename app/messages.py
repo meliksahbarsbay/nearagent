@@ -60,8 +60,31 @@ MESSAGES = {
         "live_on": "Canlı mod açık. Onay için evet yazman ya da Onayla düğmesine basman gerekir.",
         "live_off": "Canlı mod kapalı. Deneme modundasın, para hareket etmez.",
         "live_not_configured": "Canlı mod için ajan cüzdanı kurulmadı. Deneme modunda devam edebilirsin.",
-        "live_not_connected": "Canlı işlem henüz bağlı değil, para hareket etmedi. Deneme modunda devam edebilirsin.",
         "live_needs_word": "Canlı modda Enter onay sayılmaz. Evet yaz ya da Onayla düğmesine bas.",
+        "agent_frozen": "Ajan dondurulmuş, çözmek için ajanı çöz de.",
+        "live_over_limit": "Bu işlem {usd} dolar, tek işlem sınırı {limit} dolar, işlem yapılmadı. Daha küçük bir miktar söyle.",
+        "live_over_daily": "Günlük sınır aşılıyor, kalan {left} dolar, işlem yapılmadı. Daha küçük bir miktar söyle ya da yarın yeniden dene.",
+        "live_no_price": "Bu işlemin dolar değeri okunamadı, işlem yapılmadı. Biraz sonra yeniden dene.",
+        "live_no_balance": "Ajanın bakiyesi yetmiyor, işlem yapılmadı. Ajana para yatır ya da daha küçük bir miktar söyle.",
+        "live_budget": "Ajanın politika sınırı aşılıyor, işlem yapılmadı. Daha küçük bir miktar söyle ya da yarın yeniden dene.",
+        "live_busy": "Ajan başka bir işlemi bitiriyor, bu işlem gönderilmedi. Biraz sonra yeniden iste.",
+        "live_refused": "Ajan bu işlemi reddetti, para hareket etmedi. İsteği değiştirip yeniden dene.",
+        "live_quote_unreadable": "Teklif okunamadı, işlem yapılmadı. Biraz sonra yeniden dene.",
+        "live_ledger_broken": "Günlük harcama kaydı okunamadı, işlem yapılmadı. Kayıt dosyası düzelene kadar canlı işlem başlamaz.",
+        "live_unknown": "Sonuç belirsiz, para hareket etmiş olabilir. Yeniden gönderme, önce bakiyeni kontrol et.",
+        "live_changed": "Teklif değişti, işlem yapılmadı. Yeni teklifi okuyorum.",
+        "live_processing": "İşleniyor. Bitince söyleyeceğim.",
+        "live_approval": "Sahip onayı bekleniyor. Onaylanınca devam edecek.",
+        "live_uncertain": "Sonuç henüz kesinleşmedi. Yeniden gönderme, takip ediyorum.",
+        "live_done": "Tamamlandı. {amount} {symbol} aldın.",
+        "live_done_proof": "Tamamlandı. {amount} {symbol} aldın. İşlem bağlantısı için kopyala düğmesini kullan.",
+        "live_refunded": "İade edildi. Para ajanın kendi bakiyesine döndü. Yeni bir teklif isteyebilirsin.",
+        "live_refunded_part": "Kısmen tamamlandı. {amount} {symbol} aldın, kalan para ajanın kendi bakiyesine döndü. Bakiyeni kontrol et.",
+        "live_failed": "Başarısız, para hareket etmedi. Yeni bir teklif isteyebilirsin.",
+        "live_failed_unknown": "Başarısız, para hareket etmiş olabilir. Otomatik yeniden denemedim, önce bakiyeni kontrol et.",
+        "live_review": "İşlem incelemeye düştü, para hareket etmiş olabilir. Yeniden gönderme, destekle iletişime geç.",
+        "live_lost": "Bu işlemin takibi kayboldu, örneğin uygulama yeniden başladı. Yeniden gönderme, önce bakiyeni kontrol et.",
+        "high_fee": "Dikkat, ücret yüzde beşi geçiyor.",
         "confirm_question_live": "Onaylıyor musun? Evet yaz ya da Onayla düğmesine bas.",
         "large_question_live": (
             "Yaklaşık {words} dolar mı dedin? Evet yaz ya da Onayla düğmesine bas. "
@@ -71,8 +94,10 @@ MESSAGES = {
             "{mode} Veriyorsun: {amount_in} {symbol_in}. "
             "Alıyorsun: yaklaşık {amount_out} {symbol_out}. "
             "En az garanti: {min_out} {symbol_out}. {fee} "
-            "Süre: yaklaşık {duration}. Teklif {ttl} dakika geçerli."
+            "{duration} Teklif {ttl} dakika geçerli."
         ),
+        "duration": "Süre: yaklaşık {time}.",
+        "duration_unknown": "Süre bilgisi yok.",
         "fee": "Ücret: yaklaşık {usd} dolar.",
         "fee_tiny": "Ücret: 0,01 dolardan az.",
         "fee_unknown": "Ücret bilgisi yok.",
@@ -143,8 +168,31 @@ MESSAGES = {
         "live_on": "Live mode is on. To confirm, type yes or press the Confirm button.",
         "live_off": "Live mode is off. You are in dry mode, so no funds move.",
         "live_not_configured": "The agent wallet for live mode is not set up. You can continue in dry mode.",
-        "live_not_connected": "Live execution is not connected yet, so no funds moved. You can continue in dry mode.",
         "live_needs_word": "Enter does not confirm in live mode. Type yes or press the Confirm button.",
+        "agent_frozen": "The agent is frozen. To resume, say unfreeze the agent.",
+        "live_over_limit": "This swap is {usd} dollars and the limit is {limit} dollars, so nothing was sent. Ask for a smaller amount.",
+        "live_over_daily": "This would pass the daily limit, with {left} dollars left, so nothing was sent. Ask for less, or try again tomorrow.",
+        "live_no_price": "The dollar value could not be read, so nothing was sent. Try again shortly.",
+        "live_no_balance": "The agent's balance is too low, so nothing was sent. Fund the agent or ask for a smaller amount.",
+        "live_budget": "This passes the agent's policy limit, so nothing was sent. Ask for less, or try again tomorrow.",
+        "live_busy": "The agent is finishing another swap, so this one was not sent. Ask again shortly.",
+        "live_refused": "The agent refused this swap, so no funds moved. Change the request and try again.",
+        "live_quote_unreadable": "The quote could not be read, so nothing was sent. Try again shortly.",
+        "live_ledger_broken": "The daily spending record could not be read, so nothing was sent. Live swaps stay off until that file is fixed.",
+        "live_unknown": "The result is unknown, and funds may have moved. Do not send it again. Check your balance first.",
+        "live_changed": "The quote changed, so nothing was sent. Here is the new quote.",
+        "live_processing": "Processing. I will tell you when it is done.",
+        "live_approval": "Waiting for the owner's approval. It continues once approved.",
+        "live_uncertain": "The result is not final yet. Do not send it again. I am following it.",
+        "live_done": "Done. You received {amount} {symbol}.",
+        "live_done_proof": "Done. You received {amount} {symbol}. Use the copy button for the transaction link.",
+        "live_refunded": "Refunded. The funds went back to the agent's own balance. You can ask for a new quote.",
+        "live_refunded_part": "Partly done. You received {amount} {symbol}, and the rest went back to the agent's own balance. Check your balance.",
+        "live_failed": "Failed, and no funds moved. You can ask for a new quote.",
+        "live_failed_unknown": "Failed, and funds may have moved. I did not retry. Check your balance first.",
+        "live_review": "This swap needs review, and funds may have moved. Do not send it again. Contact support.",
+        "live_lost": "Tracking for this swap was lost, for example after a restart. Do not send it again. Check your balance first.",
+        "high_fee": "Warning: the fee is above five percent.",
         "confirm_question_live": "Do you confirm? Type yes or press the Confirm button.",
         "large_question_live": (
             "Did you mean about {words} dollars? Type yes or press the Confirm button. "
@@ -154,8 +202,10 @@ MESSAGES = {
             "{mode} You give: {amount_in} {symbol_in}. "
             "You get: about {amount_out} {symbol_out}. "
             "Guaranteed minimum: {min_out} {symbol_out}. {fee} "
-            "Time: about {duration}. Quote valid for {ttl} minutes."
+            "{duration} Quote valid for {ttl} minutes."
         ),
+        "duration": "Time: about {time}.",
+        "duration_unknown": "No time estimate.",
         "fee": "Fee: about {usd} dollars.",
         "fee_tiny": "Fee: under 0.01 dollars.",
         "fee_unknown": "No fee information.",
@@ -303,8 +353,36 @@ def say_fee(fee: Decimal | None, lang: str) -> str:
     return say("fee", lang, usd=format_amount(str(fee.quantize(SMALLEST_FEE, ROUND_HALF_UP)), lang))
 
 
+def say_time(seconds: int | None, lang: str) -> str:
+    if seconds is None:
+        return say("duration_unknown", lang)
+    return say("duration", lang, time=say_duration(seconds, lang))
+
+
+def say_live_status(view: dict, lang: str) -> str:
+    """One plain sentence for each state a live swap can reach."""
+    state = view["state"]
+    values = {"amount": format_amount(view.get("amount") or "0", lang), "symbol": view.get("symbol")}
+    if state == "done":
+        key = "live_done_proof" if view.get("proof") else "live_done"
+        return say(key, lang, **values)
+    if state == "refunded":
+        if view.get("amount"):
+            return say("live_refunded_part", lang, **values)
+        return say("live_refunded", lang)
+    if state == "failed":
+        return say("live_failed" if view.get("never_ran") else "live_failed_unknown", lang)
+    return say(f"live_{state}", lang)
+
+
 def say_quote(
-    quote: dict, symbol_in: str, symbol_out: str, min_out: str, lang: str, live: bool = False
+    quote: dict,
+    symbol_in: str,
+    symbol_out: str,
+    min_out: str,
+    lang: str,
+    live: bool = False,
+    ttl: int = QUOTE_TTL_MINUTES,
 ) -> str:
     return say(
         "quote",
@@ -316,8 +394,8 @@ def say_quote(
         min_out=format_amount(min_out, lang),
         symbol_out=symbol_out,
         fee=say_fee(fee_usd(quote), lang),
-        duration=say_duration(quote["timeEstimate"], lang),
-        ttl=QUOTE_TTL_MINUTES,
+        duration=say_time(quote["timeEstimate"], lang),
+        ttl=ttl,
     )
 
 
@@ -402,4 +480,5 @@ def say_error(code: str, lang: str, details: dict) -> str:
     symbol = details.get("symbol", "")
     if code == "unknown_token" and not 0 < len(symbol) <= MAX_SPOKEN_SYMBOL:
         return say("unknown_token_long", lang)
-    return say(code, lang, **details)
+    money = {k: format_usd(details[k], lang) for k in ("usd", "limit", "left") if k in details}
+    return say(code, lang, **{**details, **money})

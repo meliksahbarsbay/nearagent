@@ -8,7 +8,7 @@ import secrets
 import string
 import time
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Any, Literal
 
 from app.oneclick import QUOTE_TTL_MINUTES
 
@@ -94,6 +94,7 @@ class Pending:
     live: bool = False
     code: str = ""
     attempts: int = 0
+    order: Any = None
 
 
 class PendingStore:
@@ -107,6 +108,7 @@ class PendingStore:
         swap: dict | None = None,
         live: bool = False,
         code: str = "",
+        order: Any = None,
     ) -> str:
         now = time.monotonic()
         self._items = {k: v for k, v in self._items.items() if v.expires_at > now}
@@ -115,7 +117,7 @@ class PendingStore:
             del self._items[next(iter(self._items))]
         key = secrets.token_urlsafe(16)
         expires_at = now + QUOTE_TTL_MINUTES * 60
-        self._items[key] = Pending(kind, lang, swap or {}, expires_at, live, code)
+        self._items[key] = Pending(kind, lang, swap or {}, expires_at, live, code, order=order)
         return key
 
     def get(self, key: str) -> Pending | None:

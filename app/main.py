@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 load_dotenv()
 
-# Only checks and a read are imported: nothing in this file can reach a money action.
+# The money methods stay behind app/live.py, which checks everything again before sending.
 from app.agent_api import (  # noqa: E402
     AgentApiError,
     AgentApiRequestError,
@@ -22,6 +22,7 @@ from app.agent_api import (  # noqa: E402
     read_agent_policy,
 )
 from app.commands import detect_command  # noqa: E402
+from app.live import QUOTE_MINUTES, execute_order, prepare_order, read_operation  # noqa: E402
 from app.confirm import (  # noqa: E402
     Pending,
     PendingStore,
@@ -39,6 +40,7 @@ from app.messages import (  # noqa: E402
     say_budget,
     say_error,
     say_large,
+    say_live_status,
     say_policy,
     say_price,
     say_quote,
@@ -95,6 +97,11 @@ class ModeInput(BaseModel):
     lang: Literal["tr", "en"] = "tr"
 
 
+class TrackInput(BaseModel):
+    track: str = ""
+    lang: Literal["tr", "en"] = "tr"
+
+
 def get_oneclick() -> OneClick:
     return oneclick
 
@@ -141,6 +148,56 @@ async def resolve_pair(
     return origin, origin_assumed, destination, destination_assumed
 
 
+def confirm_question(value_in: Decimal, lang: str, live: bool) -> tuple[str, str]:
+    if value_in > LARGE_USD:
+        return "large", say_large(value_in, lang, live)
+    return "confirm", say("confirm_question_live" if live else "confirm_question", lang)
+
+
+async def offer_live(
+    from_token: str,
+    from_chain: str | None,
+    to_token: str,
+    to_chain: str | None,
+    amount: str,
+    lang: str,
+) -> dict:
+    """Quote from the agent's own account and read the terms. Nothing is sent here."""
+    order, origin_assumed, destination_assumed = await prepare_order(
+        from_token, from_chain, to_token, to_chain, amount
+    )
+    origin, destination = order.origin, order.destination
+    assumed = [t for t, flag in ((origin, origin_assumed), (destination, destination_assumed)) if flag]
+    min_out = from_atomic(order.min_out, destination["decimals"])
+    terms = say_quote(
+        order.view(), origin["symbol"], destination["symbol"], min_out, lang, True, QUOTE_MINUTES
+    )
+    warning = f" {say('high_fee', lang)}" if order.high_fee else ""
+    kind, question = confirm_question(order.usd, lang, True)
+    return {
+        "action": "swap",
+        "mode": "live",
+        "language": lang,
+        "pending": pendings.add(kind, lang, live=True, order=order),
+        "confirm_button": True,
+        "spoken": f"{terms}{warning}{say_assumed(assumed, lang)} {question}",
+        "quote": {"from": origin["assetId"], "to": destination["assetId"]},
+    }
+
+
+async def run_live(item: Pending) -> dict | JSONResponse:
+    """Send a confirmed order, or ask again if anything changed since the user heard it."""
+    try:
+        track = await execute_order(item.order)
+        if track is None:
+            offer = await offer_live(**item.order.request, lang=item.lang)
+            offer["spoken"] = f"{say('live_changed', item.lang)} {offer['spoken']}"
+            return offer
+    except QuoteError as error:
+        return error_response(error, item.lang)
+    return {**reply("live_sent", "live_processing", item.lang), "mode": "live", "track": track}
+
+
 async def run_swap(
     client: OneClick,
     from_token: str,
@@ -151,11 +208,12 @@ async def run_swap(
     lang: str,
     live: bool = False,
 ) -> dict:
+    if live:
+        return await offer_live(from_token, from_chain, to_token, to_chain, amount, lang)
     origin, origin_assumed, destination, destination_assumed = await resolve_pair(
         client, from_token, from_chain, to_token, to_chain
     )
     atomic = to_atomic(amount, origin["decimals"])
-    # Live execution is not connected: even live mode only ever asks for dry quotes.
     body = build_quote_request(
         origin["assetId"], destination["assetId"], atomic, client.account, dry=True
     )
@@ -163,19 +221,14 @@ async def run_swap(
     details = result["quote"]
     min_out = from_atomic(details["minAmountOut"], destination["decimals"])
     assumed = [t for t, flag in ((origin, origin_assumed), (destination, destination_assumed)) if flag]
-    terms = say_quote(details, origin["symbol"], destination["symbol"], min_out, lang, live)
-
-    value_in = Decimal(details.get("amountInUsd") or 0)
-    if value_in > LARGE_USD:
-        kind, question = "large", say_large(value_in, lang, live)
-    else:
-        kind, question = "confirm", say("confirm_question_live" if live else "confirm_question", lang)
+    terms = say_quote(details, origin["symbol"], destination["symbol"], min_out, lang)
+    kind, question = confirm_question(Decimal(details.get("amountInUsd") or 0), lang, False)
     return {
         "action": "swap",
-        "mode": "live" if live else "dry",
+        "mode": "dry",
         "language": lang,
-        "pending": pendings.add(kind, lang, live=live),
-        "confirm_button": live,
+        "pending": pendings.add(kind, lang),
+        "confirm_button": False,
         "spoken": f"{terms}{say_assumed(assumed, lang)} {question}",
         "quote": {
             "from": origin["assetId"],
@@ -323,7 +376,7 @@ async def answer_pending(
         return ask_again(item, key, question)
     pendings.drop(key)
     if item.live:
-        return {**reply("confirmed", "live_not_connected", item.lang), "mode": "live"}
+        return await run_live(item)
     return {**reply("confirmed", "confirmed_dry", item.lang), "mode": "dry"}
 
 
@@ -384,6 +437,23 @@ async def quote(data: QuoteInput, client: OneClick = Depends(get_oneclick)):
         )
     except QuoteError as error:
         return error_response(error, data.lang)
+
+
+@app.post("/api/live/status")
+async def live_status(data: TrackInput):
+    view = await read_operation(data.track)
+    content = {
+        "action": "live_status",
+        "mode": "live",
+        "language": data.lang,
+        "state": view["state"],
+        "final": view["final"],
+        "spoken": say_live_status(view, data.lang),
+    }
+    if view.get("proof"):
+        content["proof"] = view["proof"]
+        content["proof_key"] = view["proof_key"]
+    return content
 
 
 @app.post("/api/mode")

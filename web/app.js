@@ -36,10 +36,13 @@ const TEXT = {
     copy: "Kopyala",
     copied: "Kopyalandı.",
     copyFailed: "Kopyalanamadı. Tarayıcının pano iznini kontrol et.",
+    trackStopped: "Takibi durdurdum, sonuç hâlâ belirsiz. Yeniden gönderme, önce bakiyeni kontrol et.",
     ids: {
       correlationId: "Teklif kimliği",
       from: "Gönderilen token kimliği",
       to: "Alınan token kimliği",
+      proof: "İşlem bağlantısı",
+      proof_id: "İşlem kimliği",
     },
   },
   en: {
@@ -77,15 +80,20 @@ const TEXT = {
     copy: "Copy",
     copied: "Copied.",
     copyFailed: "Could not copy. Check the browser's clipboard permission.",
+    trackStopped: "I stopped tracking, and the result is still unknown. Do not send it again. Check your balance first.",
     ids: {
       correlationId: "Quote ID",
       from: "ID of the token to send",
       to: "ID of the token to receive",
+      proof: "Transaction link",
+      proof_id: "Transaction ID",
     },
   },
 };
 
 const ANNOUNCE_DELAY_MS = 100;
+const POLL_MS = 2000;
+const MAX_POLLS = 300;
 const SPEECH_LOCALES = { tr: "tr-TR", en: "en-US" };
 const VOICE_ERRORS = {
   "not-allowed": "voiceDenied",
@@ -174,15 +182,45 @@ function applyLanguage(next) {
 }
 
 function rememberIds(data) {
-  if (data.quote) {
+  if (data.proof) {
+    lastIds = [{ key: data.proof_key, value: data.proof }];
+  } else if (data.quote) {
     lastIds = [
       { key: "correlationId", value: data.correlationId },
       { key: "from", value: data.quote.from },
       { key: "to", value: data.quote.to },
-    ];
+    ].filter((id) => id.value);
   } else if (!data.pending) {
     lastIds = [];
   }
+}
+
+// Reads a change once, and stops at the final state. The swap goes on if this page closes.
+async function followSwap(track) {
+  let state = "processing";
+  for (let poll = 0; poll < MAX_POLLS; poll += 1) {
+    await new Promise((resolve) => window.setTimeout(resolve, POLL_MS));
+    try {
+      const response = await fetch("api/live/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ track, lang: language }),
+      });
+      const data = await response.json();
+      if (data.state !== state) {
+        state = data.state;
+        rememberIds(data);
+        renderIds();
+        lastReply = data.spoken;
+        announce(lastReply);
+      }
+      if (data.final) return;
+    } catch {
+      // A missed check changes nothing. The next one reads the same swap.
+    }
+  }
+  lastReply = TEXT[language].trackStopped;
+  announce(lastReply);
 }
 
 async function send(path, body, button) {
@@ -208,6 +246,7 @@ async function send(path, body, button) {
     if (pending) sentence.focus();
     lastReply = data.spoken || TEXT[language].failed;
     announce(lastReply);
+    if (data.track) followSwap(data.track);
   } catch (error) {
     if (error.name !== "AbortError") announce(TEXT[language].failed);
   } finally {

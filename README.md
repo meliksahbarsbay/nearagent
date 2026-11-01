@@ -22,20 +22,35 @@ Swap interfaces are visual: charts, popups, and icon-only buttons. A blind user 
 - Shortcuts: Enter sends or confirms, Esc cancels, Alt+M turns on the microphone, Alt+R repeats the last reply, and Alt+H reads the help. The text box also announces them through hidden help text.
 - Voice input through the browser's Web Speech API. It uses Turkish or English to match the page, announces `Dinliyorum` and `Anladım: ...`, and writes what it heard into the text box. It never sends by itself: you check the text and press Enter.
 - An Advanced section keeps a field-based form, `POST /api/quote`, which works with no keys.
-- Dry mode by default. The code cannot execute a swap today, so a confirmation only replies `Deneme modu: işlem yapılmadı.`
+- Dry mode by default. A dry confirmation only replies `Deneme modu: işlem yapılmadı.`
 - Agent commands, typed or spoken: `politikamı oku`, `bütçem ne kadar kaldı`, `ajanı dondur`, and `ajanı çöz`, or `read my policy`, `how much budget is left`, `freeze the agent`, and `unfreeze the agent`. With no agent they reply `Ajan cüzdanı kurulmadı`.
 - `ajanı dondur` is the emergency stop. It takes one step, needs no language model, and cuts through any open question, so the command itself is the owner's approval. It signs with the owner key and reports success only after the API confirms it.
 - `ajanı çöz` signs nothing at first. It says what would happen and gives a six digit code, and only that code signs. Enter and `evet` do not. Three wrong codes end the attempt.
-- A live mode switch in the Advanced section. It stays off with the reply `Canlı mod için ajan cüzdanı kurulmadı` unless the Agent API key, `AGENT_ID`, and `GRANT_TOKEN` are all set.
-- In live mode, Enter alone never confirms. You must type `evet` or `yes`, or press a separate Confirm button. Execution is still not connected, so even a live confirmation replies that no funds moved.
-
-## Planned, not built yet
-
-- Live execution through a policy-bound Agent API wallet. It is mainnet only and uses real funds, so it will stay off by default, use a separate account with small amounts, and require explicit user confirmation for every action. `app/agent_api.py` is the client for it, written from the Agent API docs and tested against a mock. It has never made a real authenticated call, and `app/main.py` does not use its money methods.
+- A live mode switch in the Advanced section. It stays off with the reply `Canlı mod için ajan cüzdanı kurulmadı` unless `LIVE_ENABLED=true` and the Agent API key, `AGENT_ID`, and `GRANT_TOKEN` are all set.
+- In live mode, Enter alone never confirms. You must type `evet` or `yes`, or press a separate Confirm button.
 
 ## Live mode: off until funded
 
-Live mode is off, and it stays off until the agent is funded. No agent exists yet, no real funds are held, and nothing here has run against NEAR mainnet. Funding alone does not turn on swaps: execution still has to be connected, and that is a separate step.
+Live mode is off, and it stays off until the agent is funded. No agent exists yet, no real funds are held, and nothing here has run against NEAR mainnet. Live swaps have only been tested against a local stand-in for the Agent API.
+
+The first real swap needs the owner's explicit approval, once funds arrive. It is mainnet only, with real money, in a dedicated account.
+
+### How a live swap works
+
+`app/live.py` is the only app file that can spend. Every swap follows the same order:
+
+1. The app checks the agent is active. A frozen agent replies `Ajan dondurulmuş, çözmek için ajanı çöz de.` and nothing starts. A frozen state it cannot confirm counts as frozen.
+2. It takes a dry quote from the agent's own account and reads the terms. The quote is valid for 2 minutes.
+3. It waits for a typed `evet` or the Confirm button.
+4. Just before sending, it checks the agent again and takes a fresh quote. If the quote has expired, or the output or dollar value moved by more than 0.5%, it reads the new terms and asks again.
+5. It checks its own limits, counts the swap, and sends it with one idempotency key. If the answer is lost, it sends the same request once more with the same key.
+6. It follows the result in plain words: processing, done with the amount received and a copy button for the transaction link, refunded with where the money went, or failed.
+
+An unknown result is never sent again under a new key. The page says so and tells you to check the balance.
+
+The app's limits sit on top of the owner's signed policy. `MAX_LIVE_USD` caps one swap, with a default of 5. `MAX_LIVE_DAILY_USD` caps the last 24 hours, with a default of 10. The total is stored in `data/live_spend.json`, so a restart cannot reset it. A swap stays counted unless it is proven that nothing was sent, so a refund still counts. If that file cannot be read, live swaps stop.
+
+### Funding
 
 Funding uses real money and needs two transfers, about 0.1 NEAR and about 10 USDC:
 
@@ -55,6 +70,7 @@ Funding uses real money and needs two transfers, about 0.1 NEAR and about 10 USD
 5. Run `python scripts/owner_setup.py create --onay=CODE`, then `grant --onay=CODE`. They sign only the saved rules, and stop if the API prepared anything different. The plan is valid for one hour.
 6. Run `python scripts/owner_setup.py deposit`. It prints a one-time address. Send about 10 USDC to it on the Base network, and only to that address. A repeat run shows the same address, and `--yeni` asks for a new one.
 7. Run `python scripts/owner_setup.py balance` to see the funds arrive.
+8. Set `LIVE_ENABLED=true` in `.env` and restart the app. Only do this for the first real swap, after the owner approves it.
 
 `freeze` stops the agent from a terminal, in one step. `unfreeze` prints a code, and `unfreeze --onay=CODE` signs. Unfreezing has a 10 minute cooldown on the API's side. Freezing has none.
 
@@ -65,8 +81,8 @@ The signing approach follows the Agent API documentation and its examples. That 
 ## How NEAR is used
 
 - NEAR AI Cloud parses sentences through its OpenAI-compatible API. The default model is `z-ai/glm-5.3-flash`, listed as Private TEE. OpenAI is the fallback, used when the NEAR AI key is missing or NEAR AI fails.
-- NEAR Intents 1Click API supplies token data, prices, and quotes.
-- Dry and live quotes share one code path, and both use `INTENTS` for `depositType`, `refundType`, and `recipientType`. Only the `dry` flag differs.
+- NEAR Intents 1Click API supplies token data, prices, and quotes in dry mode, always with `INTENTS` for `depositType`, `refundType`, and `recipientType`.
+- The NEAR Intents Agent API runs live swaps from a policy-bound agent wallet, which holds its funds in its own NEAR Intents account.
 
 ## Run it in 5 minutes
 
@@ -147,6 +163,9 @@ NEAR AI Cloud has not been measured on this set yet.
 - Owner signing runs from a key in `.env`, not a wallet. Keep only a small amount in a dedicated owner account.
 - Freezing and unfreezing were tested with the real signer against a local stand-in API, not the real Agent API. Real timing will be slower. If the result takes more than about 30 seconds, the page says it is not known yet and never claims success.
 - A spoken `ajanı dondur` still needs Enter, because voice input never sends by itself.
+- The Agent API documents the live quote's `quote` object only loosely. The app reads `amount_out`, `min_amount_out`, and `time_estimate`. Only `amount_out` is named in the docs, so these need checking on the first real quote. If `amount_out` is missing, nothing is sent. If the minimum is missing, the app uses 1% below the quote.
+- The docs give no per-transaction link form. The default is `https://nearblocks.io/txns/{hash}`, which `EXPLORER_TX_URL` can change. With no transaction hash, the copy button holds the intent hash.
+- Live swaps do not check the token list of 1Click: the agent's own token list is used.
 
 ## NVDA ile doğrulanacaklar
 
