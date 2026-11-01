@@ -2,7 +2,15 @@
 
 Tarih: 2026-11-01. Hedef: WCAG 2.2 AA.
 
-Bu dosya yalnızca rapordur. Hiçbir düzeltme yapılmadı. Düzeltmeleri `main` üzerindeki 1. oturum yapacak.
+Bu dosya denetimin kaydıdır. Aşağıdaki bulgular denetim anını anlatır, sonuçlar değişmedi.
+
+## Düzeltme durumu
+
+- Düzeltildi ve Chrome'da klavye ile doğrulandı: A1, A2, A3, B1, B2, B3, B4.
+- Düzeltildi, görerek kontrol edildi: D1, D2, D3, D4, D5, D7, sayfa başlığı ve etiket aralığı (D8).
+- Açık, NVDA gerekiyor: B5.
+- Açık, yapılmadı: D6 (`aria-invalid`), teklif süresi uyarısı ve duyuru sırası (D8).
+- Denetim düzeltmelerden sonra yeniden çalıştırılmadı. axe sonucu eski kod içindir.
 
 ## Özet
 

@@ -19,7 +19,10 @@ Swap interfaces are visual: charts, popups, and icon-only buttons. A blind user 
 - If a sentence has no amount, it asks how much and applies your answer to the same swap.
 - Numbers are written for screen readers: a comma in Turkish, a dot in English, no extra zeros. Long identifiers are never read aloud, and each one has a copy button.
 - Every error says what happened and what to do next, with no codes.
-- Shortcuts: Enter sends or confirms, Esc cancels, Alt+M turns on the microphone, Alt+R repeats the last reply, and Alt+H reads the help. The text box also announces them through hidden help text.
+- Shortcuts: Enter sends or confirms, Esc cancels, Alt+M turns on the microphone, Alt+R repeats the last reply, and Alt+H reads the help. They are shown under the text box, and a screen reader hears them with it.
+- The page opens in the browser's language: Turkish for a Turkish browser, and English otherwise. A language menu sits below the text box, and a change is announced.
+- Focus is kept: after Confirm it moves to the text box, and copy buttons keep it when their list changes.
+- Live mode shows in text and without relying on colour: a `Mod: Canlı, gerçek para` line, and every button and help text warns of real money. A microphone that is listening shows the same way.
 - Voice input through the browser's Web Speech API. It uses Turkish or English to match the page, announces `Dinliyorum` and `Anladım: ...`, and writes what it heard into the text box. It never sends by itself: you check the text and press Enter.
 - An Advanced section keeps a field-based form, `POST /api/quote`, which works with no keys.
 - Dry mode by default. A dry confirmation only replies `Deneme modu: işlem yapılmadı.`
@@ -119,7 +122,7 @@ Sentences such as `1 SOL kaç dolar` need a key. Copy `.env.example` to `.env`, 
 Prices below are examples, so your numbers will differ. Steps 3 to 10, 12, and 13 need a key. Each step starts from an empty text box.
 
 1. Do: run `python -m pytest -q`. See: all tests pass, with no network calls.
-2. Do: open http://127.0.0.1:8000 and press Tab. See: focus lands on the text box labelled `Ne yapmak istiyorsun?`, and a screen reader also reads the shortcuts.
+2. Do: open http://127.0.0.1:8000 and press Tab. See: focus lands on the text box labelled `Ne yapmak istiyorsun?` or `What do you want to do?`, by your browser's language, and a screen reader also reads the shortcuts. The steps below use the Turkish labels.
 3. Do: type `1 SOL kaç dolar` and press Enter. See: a sentence like `1 SOL yaklaşık 95,93 dolar. Solana üzerindeki SOL'u kullandım; başka zincir istersen söyle.`
 4. Do: type `50 USDC'yi Solana'da SOL'a çevir` and press Enter. See: `Deneme modu. Veriyorsun: 50 USDC. Alıyorsun: yaklaşık ...`, ending with `Onaylıyor musun? Evet de ya da Enter'a bas.`
 5. Do: press Alt+R. See: the same reply again. Then press Enter on the empty box. See: `Deneme modu: işlem yapılmadı.`
@@ -176,6 +179,8 @@ NEAR AI Cloud has not been measured on this set yet.
 - The Agent API documents the live quote's `quote` object only loosely. The app reads `amount_out`, `min_amount_out`, and `time_estimate`. Only `amount_out` is named in the docs, so these need checking on the first real quote. If `amount_out` is missing, nothing is sent. If the minimum is missing, the app uses 1% below the quote.
 - The docs give no per-transaction link form. The default is `https://nearblocks.io/txns/{hash}`, which `EXPLORER_TX_URL` can change. With no transaction hash, the copy button holds the intent hash.
 - Live swaps do not check the token list of 1Click: the agent's own token list is used.
+- Trade history is off in the public demo, because a shared server would read one visitor's trades to another.
+- The accessibility audit in `docs/accessibility-audit.md` found no problem that axe detected, and listed manual findings. All high and medium ones are fixed except B5, which needs NVDA. It is not a conformance claim.
 
 ## NVDA ile doğrulanacaklar
 
@@ -183,6 +188,7 @@ Not yet checked with NVDA:
 
 - [ ] Esc: NVDA may use the first press to leave focus mode, so cancelling may take two presses.
 - [ ] Focus after a copy button: Enter copies again until focus returns to the text box. Check that this is clear in use.
+- [ ] Focus after the form: moving to the text box reads its label and shortcuts. Check that this does not delay or cut the quote that follows.
 - [ ] Spoken replies: check that each `aria-live` reply is read aloud in full, including a repeat with Alt+R.
 - [ ] Microphone: check that speakers do not feed NVDA's voice into recognition. Headphones may be needed.
 
