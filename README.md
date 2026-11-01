@@ -61,7 +61,7 @@ The app's limits sit on top of the owner's signed policy. `MAX_LIVE_USD` caps on
 
 `docs/funding.md` has the full numbered steps in Turkish. The order matters: NEAR first, because the owner account must exist before it signs, and USDC last, because the deposit address exists only after the agent does.
 
-Funding uses real money and needs two transfers, about 0.1 NEAR and about 10 USDC:
+Funding uses real money and needs two transfers, about 0.1 NEAR and 5 USDC:
 
 1. Get a partner API key from https://partners.near-intents.org and add it to `.env` as `NEAR_INTENTS_AGENT_API_KEY`.
 2. Install the signer and create the owner key. This needs Node 20 or later:
@@ -77,7 +77,7 @@ Funding uses real money and needs two transfers, about 0.1 NEAR and about 10 USD
 3. Send 0.1 NEAR to that owner address. The account appears on chain with its first transfer. The 0.1 follows the NEAR docs' example, and is not a required minimum.
 4. Run `python scripts/owner_setup.py plan`. It prints the rules and a code, and signs nothing.
 5. Run `python scripts/owner_setup.py create --onay=CODE`, then `grant --onay=CODE`. They sign only the saved rules, and stop if the API prepared anything different. The plan is valid for one hour.
-6. Run `python scripts/owner_setup.py deposit`. It prints a one-time address. Send about 10 USDC to it on the Base network, and only to that address. A repeat run shows the same address, and `--yeni` asks for a new one.
+6. Run `python scripts/owner_setup.py deposit`. It prints a one-time address. Send 5 USDC to it on the Base network, and only to that address. A repeat run shows the same address, and `--yeni` asks for a new one.
 7. Run `python scripts/owner_setup.py balance` to see the funds arrive.
 8. Set `LIVE_ENABLED=true` in `.env` and restart the app. Only do this for the first real swap, after the owner approves it.
 
@@ -89,7 +89,13 @@ Funds can leave only to the owner address, which is read from the signed policy.
 
 From a terminal, `python scripts/owner_setup.py withdraw --ne "hepsini USDC"` shows the same terms and a code, and `--onay=CODE` sends. The code belongs to that exact amount.
 
-Withdrawals count against the daily budget and the per-transaction limit, so 10 USDC needs two withdrawals. `hepsini` stops at the limit and says so. Funds arrive on the owner's NEAR account, and moving them on from there needs a NEAR wallet. This has only run against a stand-in API.
+Withdrawals count against the daily budget and the per-transaction limit. `hepsini` stops at the limit and says so. This has only run against a stand-in API.
+
+### Returning funds to an exchange
+
+Swap to NEAR in the agent, withdraw it to the owner account, and send it on with `scripts/owner/send_near.mjs`. The Agent API documents that NEAR withdrawn to `near` always arrives as native NEAR, with no registration, so no unwrap step is needed. A token other than NEAR would stay on the owner account, and the withdrawal says so before you confirm.
+
+`send_near.mjs` shows the terms and a one-time code, and sends only with that code, for that exact address and amount. It keeps at least 0.05 NEAR in the account. A plain NEAR transfer has no memo field, so `--memo` stops it. It does not send without the memo, because that could lose the funds. `docs/funding.md` has the numbered steps.
 
 The rules: swap, plus withdraw only to the owner's address, for USDC on NEAR and Base, wNEAR, SOL, and ETH, with 10 dollars a day and 10 actions an hour. The API has no per-transaction dollar cap, so the 5 dollar cap is converted to token amounts at the prices when the plan was made. If a token's price rises, that cap rises in dollars. The daily cap stays in dollars.
 
@@ -212,7 +218,7 @@ All settings are optional in dry mode. See `.env.example`. Keys belong in `.env`
 ## Stack and disclosures
 
 - Backend: Python, FastAPI, httpx, uvicorn, python-dotenv. Tests: pytest.
-- Owner signing: Node with `near-api-js`.
+- Owner signing and sending: Node with `near-api-js`.
 - Frontend: plain HTML and vanilla JavaScript, no framework.
 - All code was written for this hackathon, with AI assistance from Claude Code.
 - NEAR agent skills `near-intents` and `near-ai-cloud` were used as references. `skills-lock.json` records them.

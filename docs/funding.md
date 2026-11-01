@@ -5,7 +5,7 @@ Bu adımlar gerçek para kullanır ve NEAR mainnet üzerinde çalışır. Hiçbi
 ## Özet
 
 - Sahip adresine: 0,1 NEAR, NEAR ağında.
-- Ajana: yaklaşık 10 USDC, Base ağında.
+- Ajana: 5 USDC, Base ağında.
 - Sıra: önce NEAR, en son USDC. USDC adresi ancak ajan kurulduktan sonra alınabilir.
 - Ajan adresi tek kullanımlıktır. USDC'yi başka bir adrese ya da başka bir ağdan gönderme.
 
@@ -50,7 +50,7 @@ Komutları proje klasöründe çalıştır. Claude Code içinden çalıştıraca
    ```
 
    Ekranda ağ, adres, en az tutar ve son tarih çıkar. Komutu tekrar çalıştırmak aynı adresi verir. Yeni adres için `--yeni` ekle.
-10. Binance'ten bu adrese yaklaşık 10 USDC çek. Ağ olarak **Base** seç. Binance ekranında Base yoksa çekme ve haber ver. Ücret düşüldükten sonra ulaşan tutar, 9. adımdaki en az tutardan az olmamalı.
+10. Binance'ten bu adrese 5 USDC çek. Ağ olarak **Base** seç. Binance ekranında Base yoksa çekme ve haber ver. Ücret düşüldükten sonra ulaşan tutar, 9. adımdaki en az tutardan az olmamalı.
 11. Parayı kontrol et. Görünene kadar birkaç dakikada bir çalıştır:
 
     ```
@@ -66,35 +66,61 @@ Komutları proje klasöründe çalıştır. Claude Code içinden çalıştıraca
     ```
 
 13. Canlı modu aç: `.env` dosyasına `LIVE_ENABLED=true` ekle, uygulamayı yeniden başlat, Gelişmiş bölümünden `Canlı mod` düğmesine bas.
-14. İlk takası küçük yap, örneğin 1 USDC. Sınırlar: işlem başına 5 dolar, günde 10 dolar.
+14. İlk gerçek işlem için geri dönüş adımlarına geç. Sınırlar: işlem başına 5 dolar, günde 10 dolar.
 
-## Parayı geri çekme
+## Binance'e geri dönüş
 
-Para yalnızca sahip adresine gider. Bu adres imzalanan politikadan okunur, başka adres kabul edilmez. Çekim gerçek para kullanır ve hiç denenmedi, ilk gerçek çekim senin onayınla yapılacak.
+Yol: USDC, ajanda NEAR'a çevrilir. NEAR sahip hesabına çekilir. Sahip hesabından Binance'e gönderilir.
 
-Sayfadan:
+Doküman, NEAR'ın sahip hesabına her zaman native NEAR olarak ulaştığını söylüyor. Bu yüzden unwrap adımı ve storage kaydı gerekmiyor. Hiçbir adım gerçek ağda denenmedi, ilk gerçek işlem senin onayınla yapılacak.
 
-1. Gelişmiş bölümünden `Canlı mod` düğmesine bas.
-2. `paramı cüzdanıma çek`, `hepsini USDC çek` ya da `2 USDC'yi cüzdanıma çek` yaz, Enter'a bas. Ne çekileceği, nereye gideceği ve bütçeden ne kadar düşeceği okunur.
-3. `evet` yaz ya da Onayla düğmesine bas. Enter tek başına onay sayılmaz.
+15. Canlı mod açıkken ajandaki bakiyeyi NEAR'a çevir. Tutarı bakiyeden biraz az yaz, çünkü işlem başına sınır 5 dolar:
 
-Terminalden, `LIVE_ENABLED` gerekmez:
+    ```
+    Base'deki 4,9 USDC'yi NEAR'a çevir
+    ```
 
-```
-.venv\Scripts\python scripts\owner_setup.py withdraw --ne "hepsini USDC"
-.venv\Scripts\python scripts\owner_setup.py withdraw --ne "hepsini USDC" --onay=KOD
-```
+    Koşullar okunur. `evet` yaz ya da Onayla düğmesine bas. Enter onay sayılmaz.
+16. Sonucu kontrol et, wNEAR görünmeli:
 
-İlk komut hiçbir şey göndermez, ne çekileceğini ve onay kodunu gösterir. Kod o tutara özeldir. Tutar değişirse kod çalışmaz.
+    ```
+    .venv\Scripts\python scripts\owner_setup.py balance
+    ```
 
-## Çekim sınırları
+17. NEAR'ı sahip hesabına çek. Sayfada `hepsini NEAR çek` yaz ya da terminalde şunu çalıştır:
 
-- Çekim günlük 10 dolarlık bütçeden düşer. Bütçe yetmezse `bugün çekilemez, yarın tekrar dene` denir.
-- İşlem başına sınır çekimlere de uygulanır, yani yaklaşık 5 dolar. 10 USDC tek seferde çekilemez. `hepsini çek` sınıra iner ve bunu söyler, kalan için komutu yeniden çalıştırırsın.
-- Aynı gün takas da yaptıysan bütçe erken biter, kalanı ertesi güne kalır.
-- Önizleme hakkı günde 20. Her çekim 2 önizleme kullanır.
-- Birden çok token varsa hangisini istediğini söylemen gerekir. Tek komut bütün tokenleri çekmez.
-- Çekilen para NEAR ağındaki sahip hesabına gelir. Base USDC, NEAR üzerindeki USDC olarak gelir. Oradan Binance'e göndermek için bu projede bir komut yok. Sahip anahtarını bir NEAR cüzdanına aktarman gerekir.
+    ```
+    .venv\Scripts\python scripts\owner_setup.py withdraw --ne "hepsini NEAR"
+    .venv\Scripts\python scripts\owner_setup.py withdraw --ne "hepsini NEAR" --onay=KOD
+    ```
+
+18. Binance'te Yatır ekranını aç, NEAR seç, ağ olarak NEAR Protocol seç, adresi kopyala.
+19. **Binance memo ya da tag gösteriyorsa dur, gönderme.** NEAR transferinin memo alanı yoktur. Memosuz gönderim Binance'te kaybolabilir. Önce Binance desteğine sor.
+20. Koşulları gör ve onay kodu al. Bu adım hiçbir şey göndermez:
+
+    ```
+    node scripts/owner/send_near.mjs --to ADRES --hepsi
+    ```
+
+    Betik sahip hesabında en az 0,05 NEAR bırakır. Belirli bir tutar için `--hepsi` yerine `--miktar 1,5` yaz.
+21. Gönder. Kod tek kullanımlıktır, 10 dakika geçerlidir, o adres ve tutar içindir:
+
+    ```
+    node scripts/owner/send_near.mjs --to ADRES --hepsi --onay=KOD
+    ```
+
+    Ekrana işlem kimliği çıkar. Sonuç belirsiz derse yeniden gönderme, önce Binance'e ve bakiyeye bak.
+22. Binance'te NEAR'ın geldiğini gör.
+
+## Bu yolun sınırları
+
+- Bütçe yeter ama pay az: 4,9 dolarlık takas ve 4,9 dolarlık çekim günlük 10 doların 9,8 dolarını kullanır. Aynı gün başka işlem yaparsan çekim ertesi güne kalır. `bugün çekilemez, yarın tekrar dene` denir.
+- Çekimde tek işlem sınırı da geçerlidir. Bu sınır plan anındaki NEAR fiyatına göre yaklaşık 5 dolardır. Fiyat düştüyse `hepsini` sınıra iner, kalanı için yeni bir çekim gerekir.
+- 0,1 USDC kadar bir artık ajanda kalabilir. Bu tutarı çevirmek için yeni bir takas gerekir.
+- Çekim önizlemesi günde 20 ile sınırlıdır, her çekim 2 tane kullanır.
+- Sayfadan çekim için canlı modun açık olması gerekir. Terminal çekimi canlı mod istemez.
+- USDC'yi doğrudan sahip hesabına çekme. Bu token oradan Binance'e gönderilemez, kayıt gerekip gerekmediği de belgede yok. Uygulama bunu okurken uyarır.
+- Binance'in NEAR yatırma için memo isteyip istemediğini ve en az tutarını doğrulayamadım. Doğru bilgi Binance ekranındadır.
 
 ## Sınırlar
 
