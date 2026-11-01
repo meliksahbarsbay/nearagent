@@ -294,6 +294,28 @@ class AgentApi:
             idempotency_key=idempotency_key,
         )
 
+    async def withdraw(
+        self,
+        agent_id: str,
+        asset: str,
+        amount: str,
+        chain: str,
+        recipient: str,
+        idempotency_key: str,
+        dry: bool = False,
+    ) -> dict:
+        """Send funds out. A preview also needs the grant and a key, and is limited per day."""
+        body = {"asset": asset, "amount": amount, "chain": chain, "recipient": recipient}
+        if dry:
+            body["dry"] = True
+        return await self._request(
+            "POST",
+            self._agent_path(agent_id, "/withdraw"),
+            body=body,
+            idempotency_key=idempotency_key,
+            grant=True,
+        )
+
     async def quote_swap(
         self, agent_id: str, origin_asset: str, destination_asset: str, amount: str
     ) -> dict:

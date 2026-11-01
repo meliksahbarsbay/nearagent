@@ -28,9 +28,9 @@ const TEXT = {
     shortcutsLive:
       "Kısayollar: Enter gönderir, onaylamaz. Onay için evet yaz. Esc iptal eder. Alt M mikrofonu açar. Alt R son cevabı tekrar okur. Alt H yardımı okur.",
     helpLive:
-      "Canlı mod açık, onayladığın takaslar gerçek para kullanır. Bir cümle yaz ve Enter'a bas. Teklif okununca onaylamak için evet yaz ya da Onayla düğmesine bas, Enter onay sayılmaz. Esc ya da hayır iptal eder. Alt M mikrofonu açar. Alt R son cevabı tekrar okur. Komutlar: cüzdanımda ne var, son işlemlerimi oku, politikamı oku, bütçem ne kadar kaldı, ajanı dondur, ajanı çöz.",
+      "Canlı mod açık, onayladığın takaslar gerçek para kullanır. Bir cümle yaz ve Enter'a bas. Teklif okununca onaylamak için evet yaz ya da Onayla düğmesine bas, Enter onay sayılmaz. Esc ya da hayır iptal eder. Alt M mikrofonu açar. Alt R son cevabı tekrar okur. Komutlar: cüzdanımda ne var, son işlemlerimi oku, paramı cüzdanıma çek, politikamı oku, bütçem ne kadar kaldı, ajanı dondur, ajanı çöz.",
     help:
-      "Bir cümle yaz ve Enter'a bas, örneğin 2 NEAR'ı USDC'ye çevir. Teklif okununca Enter ya da evet onaylar, Esc ya da hayır iptal eder. Alt M mikrofonu açar. Alt R son cevabı tekrar okur. Komutlar: cüzdanımda ne var, son işlemlerimi oku, politikamı oku, bütçem ne kadar kaldı, ajanı dondur, ajanı çöz.",
+      "Bir cümle yaz ve Enter'a bas, örneğin 2 NEAR'ı USDC'ye çevir. Teklif okununca Enter ya da evet onaylar, Esc ya da hayır iptal eder. Alt M mikrofonu açar. Alt R son cevabı tekrar okur. Komutlar: cüzdanımda ne var, son işlemlerimi oku, paramı cüzdanıma çek, politikamı oku, bütçem ne kadar kaldı, ajanı dondur, ajanı çöz.",
     mic: "Mikrofon",
     confirm: "Onayla, gerçek para",
     live: "Canlı mod",
@@ -57,6 +57,7 @@ const TEXT = {
       proof: "İşlem bağlantısı",
       proof_id: "İşlem kimliği",
       trade: "İşlem",
+      owner_address: "Sahip adresi",
     },
   },
   en: {
@@ -86,9 +87,9 @@ const TEXT = {
     shortcutsLive:
       "Shortcuts: Enter sends and does not confirm. To confirm, type yes. Escape cancels. Alt M turns on the microphone. Alt R repeats the last reply. Alt H reads the help.",
     helpLive:
-      "Live mode is on, and swaps you confirm use real money. Type a sentence and press Enter. After a quote, type yes or press the Confirm button to confirm. Enter does not confirm. Escape or no cancels. Alt M turns on the microphone. Alt R repeats the last reply. Commands: what is my balance, read my recent trades, read my policy, how much budget is left, freeze the agent, unfreeze the agent.",
+      "Live mode is on, and swaps you confirm use real money. Type a sentence and press Enter. After a quote, type yes or press the Confirm button to confirm. Enter does not confirm. Escape or no cancels. Alt M turns on the microphone. Alt R repeats the last reply. Commands: what is my balance, read my recent trades, withdraw to my wallet, read my policy, how much budget is left, freeze the agent, unfreeze the agent.",
     help:
-      "Type a sentence and press Enter, for example swap 2 NEAR to USDC. After a quote, Enter or yes confirms, and Escape or no cancels. Alt M turns on the microphone. Alt R repeats the last reply. Commands: what is my balance, read my recent trades, read my policy, how much budget is left, freeze the agent, unfreeze the agent.",
+      "Type a sentence and press Enter, for example swap 2 NEAR to USDC. After a quote, Enter or yes confirms, and Escape or no cancels. Alt M turns on the microphone. Alt R repeats the last reply. Commands: what is my balance, read my recent trades, withdraw to my wallet, read my policy, how much budget is left, freeze the agent, unfreeze the agent.",
     mic: "Microphone",
     confirm: "Confirm, real money",
     live: "Live mode",
@@ -115,6 +116,7 @@ const TEXT = {
       proof: "Transaction link",
       proof_id: "Transaction ID",
       trade: "Trade",
+      owner_address: "Owner address",
     },
   },
 };

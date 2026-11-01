@@ -5,6 +5,8 @@
     python scripts/owner_setup.py grant --onay=KOD    Sign the grant for this backend.
     python scripts/owner_setup.py deposit             Get the address that funds the agent.
     python scripts/owner_setup.py balance             Read the agent's balance.
+    python scripts/owner_setup.py withdraw --ne "hepsini USDC"       Show a withdrawal.
+    python scripts/owner_setup.py withdraw --ne "..." --onay=KOD     Send it to the owner.
     python scripts/owner_setup.py freeze              Stop every action now, in one step.
     python scripts/owner_setup.py unfreeze            Show the code that unfreezing needs.
     python scripts/owner_setup.py unfreeze --onay=KOD Sign and let the agent act again.
@@ -39,7 +41,11 @@ from app.agent_api import (  # noqa: E402
     new_idempotency_key,
     safe_policy,
 )
-from app.owner import DEFAULT_RPC_URL, run_intent  # noqa: E402
+from app.history import history  # noqa: E402
+from app.live import STATES, plan_withdraw, send_withdraw  # noqa: E402
+from app.messages import say_withdraw  # noqa: E402
+from app.oneclick import QuoteError  # noqa: E402
+from app.owner import DEFAULT_RPC_URL, run_intent, wait_for  # noqa: E402
 from app.owner import OwnerError as SetupError  # noqa: E402
 
 ENV_PATH = ROOT / ".env"
@@ -287,6 +293,59 @@ async def balance_command(env: dict, transport=None) -> None:
         print(f"{row.get('symbol')} ({row.get('blockchain')}): {row.get('balance')}")
 
 
+def withdraw_code(env: dict, order) -> str:
+    """A code for this exact withdrawal. A changed amount gives a different code."""
+    return short_code(
+        {
+            "agent": env["AGENT_ID"],
+            "asset": order.asset,
+            "amount": order.amount,
+            "chain": order.chain,
+            "recipient": order.recipient,
+        }
+    )
+
+
+async def withdraw_command(env: dict, what: str, code: str, transport=None) -> None:
+    """Show a withdrawal, then send it with its code. Only the policy's address can receive."""
+    require(env, "NEAR_INTENTS_AGENT_API_KEY", "AGENT_ID", "GRANT_TOKEN")
+    if not what.strip():
+        raise SetupError('Ne cekilecegini yaz, ornegin --ne "hepsini USDC".')
+    base_url = env.get("NEAR_INTENTS_AGENT_API_URL") or DEFAULT_BASE_URL
+    api = AgentApi(env["NEAR_INTENTS_AGENT_API_KEY"], base_url, env["GRANT_TOKEN"], transport)
+    agent_id = env["AGENT_ID"]
+    try:
+        order = await plan_withdraw(api, agent_id, what, "tr")
+    except QuoteError as error:
+        raise SetupError(f"Cekilmedi: {error.code}") from None
+    expected = withdraw_code(env, order)
+    print(say_withdraw(order, "tr", 2))
+    print(f"Hedef adres: {order.recipient}")
+    if not code:
+        print(f"Onay kodu: {expected}")
+        return
+    if code != expected:
+        raise SetupError("Onay kodu bu cekime uymuyor. Hicbir sey gonderilmedi.")
+    try:
+        result = await send_withdraw(api, agent_id, order)
+    except QuoteError as error:
+        raise SetupError(f"Cekilmedi: {error.code}") from None
+    saved = {
+        "mode": "withdraw",
+        "gave": order.amount_text,
+        "gave_symbol": order.symbol,
+        "got": order.received_text or order.amount_text,
+        "got_symbol": order.symbol,
+    }
+    if not result or not result.get("correlation_id"):
+        history.add(status="unknown", ref=None, **saved)
+        raise SetupError("Sonuc belirsiz. Tekrar calistirmadan once bakiyeyi kontrol et.")
+    entry = history.add(status="processing", ref=result["correlation_id"], **saved)
+    status = await wait_for(api, result["correlation_id"])
+    history.update(entry, status=STATES.get(status["status"], "processing"))
+    print(f"Durum: {status['status']}. Takip kodu: {result['correlation_id']}")
+
+
 async def control_command(env: dict, kind: str, transport=None) -> None:
     require_owner(env, "AGENT_ID")
     api = client_for(env, transport)
@@ -320,6 +379,8 @@ async def run(args: argparse.Namespace) -> None:
         await deposit_command(env, args.yeni)
     elif args.command == "balance":
         await balance_command(env)
+    elif args.command == "withdraw":
+        await withdraw_command(env, args.ne, args.onay)
     elif args.command == "freeze":
         await control_command(env, "agent_freeze")
     else:
@@ -331,9 +392,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="nearagent owner setup")
     parser.add_argument(
         "command",
-        choices=["plan", "create", "grant", "deposit", "balance", "freeze", "unfreeze"],
+        choices=["plan", "create", "grant", "deposit", "balance", "withdraw", "freeze", "unfreeze"],
     )
     parser.add_argument("--onay", default="")
+    parser.add_argument("--ne", default="", help='withdraw: what to send, such as "5 USDC"')
     parser.add_argument("--yeni", action="store_true", help="deposit: ask for a new address")
     args = parser.parse_args()
     try:

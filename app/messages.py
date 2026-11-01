@@ -30,6 +30,23 @@ TURKISH_ACCUSATIVE = {
 MESSAGES = {
     "tr": {
         "no_agent": "Ajan cüzdanı kurulmadı. Kurulum bitince yeniden dene.",
+        "withdraw_terms": "{mode} Çekilecek: {amount} {symbol}. Nereye: sahip adresin, {chain} ağı. {received} {fee} {budget} Teklif {ttl} dakika geçerli.",
+        "withdraw_capped": "Hepsi tek seferde çekilemez, tek işlem sınırı bu kadar.",
+        "withdraw_received": "Ulaşacak: yaklaşık {amount} {symbol}.",
+        "withdraw_received_unknown": "Ulaşacak tutar önizlemede yok.",
+        "withdraw_budget": "Bu çekim günlük bütçenden yaklaşık {usd} dolar düşer, kalan {left} dolar olur.",
+        "withdraw_budget_no_cap": "Bu çekim yaklaşık {usd} dolar, günlük bütçe sınırı yok.",
+        "withdraw_done": "Çekim tamamlandı. {amount} {symbol} sahip adresine gitti.",
+        "withdraw_done_proof": "Çekim tamamlandı. {amount} {symbol} sahip adresine gitti. İşlem bağlantısı için kopyala düğmesini kullan.",
+        "withdraw_needs_live": "Çekim gerçek para kullanır, işlem yapılmadı. Önce Gelişmiş bölümünden canlı modu aç.",
+        "withdraw_no_budget": "Günlük bütçe yetmiyor, bugün çekilemez. Yarın tekrar dene.",
+        "withdraw_over_limit": "Bu tutar tek işlem sınırını aşıyor, işlem yapılmadı. Daha küçük bir tutar söyle.",
+        "withdraw_owner_only": "Yalnızca sahip adresine çekebilirim, başka adres kabul etmem. Adres söylemeden yeniden iste.",
+        "withdraw_no_target": "Politikada tek bir sahip adresi yok, işlem yapılmadı. Politikayı kontrol et.",
+        "withdraw_empty": "Ajanda çekilecek bakiye yok. Önce bakiyeni kontrol et.",
+        "withdraw_no_token": "Ajanda bu token yok, işlem yapılmadı. Bakiyede olanlar: {tokens}.",
+        "withdraw_which": "Hangisini çekeyim, işlem yapılmadı. Token ya da zincir adıyla yeniden söyle: {tokens}.",
+        "withdraw_preview_limit": "Bugünkü önizleme hakkı doldu, işlem yapılmadı. Yarın tekrar dene.",
         "agent_read_failed": "Ajan bilgisi alınamadı. Biraz sonra yeniden dene.",
         "policy_not_ready": "Politika henüz yürürlükte değil. Biraz sonra yeniden sor.",
         "policy": "Politika: izinli işlemler {actions}. {assets} varlık izinli. {budget} {frozen}",
@@ -110,7 +127,7 @@ MESSAGES = {
         "history_row": "İşlem {number}: {date}, {mode}. {gave} {gave_symbol} verildi, {got} {got_symbol} alındı, {status}.",
         "history_date": "{day} {month}, saat {time}",
         "history_months": ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"],
-        "history_modes": {"dry": "deneme", "live": "canlı"},
+        "history_modes": {"dry": "deneme", "live": "canlı", "withdraw": "çekim"},
         "history_status": {
             "dry": "işlem yapılmadı",
             "processing": "işleniyor",
@@ -174,6 +191,23 @@ MESSAGES = {
     },
     "en": {
         "no_agent": "The agent wallet is not set up. Try again after setup.",
+        "withdraw_terms": "{mode} Withdrawing: {amount} {symbol}. To: your owner address, on {chain}. {received} {fee} {budget} Quote valid for {ttl} minutes.",
+        "withdraw_capped": "All of it cannot go at once, so this is the limit for one transaction.",
+        "withdraw_received": "Arriving: about {amount} {symbol}.",
+        "withdraw_received_unknown": "The preview does not show the amount arriving.",
+        "withdraw_budget": "This takes about {usd} dollars from your daily budget, leaving {left} dollars.",
+        "withdraw_budget_no_cap": "This is about {usd} dollars, and there is no daily budget cap.",
+        "withdraw_done": "Withdrawal done. {amount} {symbol} went to your owner address.",
+        "withdraw_done_proof": "Withdrawal done. {amount} {symbol} went to your owner address. Use the copy button for the transaction link.",
+        "withdraw_needs_live": "A withdrawal uses real money, so nothing was sent. Turn on live mode in the Advanced section first.",
+        "withdraw_no_budget": "The daily budget is too low, so this cannot be withdrawn today. Try again tomorrow.",
+        "withdraw_over_limit": "This is over the one transaction limit, so nothing was sent. Ask for a smaller amount.",
+        "withdraw_owner_only": "I can only withdraw to the owner address, and no other. Ask again without an address.",
+        "withdraw_no_target": "The policy has no single owner address, so nothing was sent. Check the policy.",
+        "withdraw_empty": "The agent has no balance to withdraw. Check your balance first.",
+        "withdraw_no_token": "The agent does not hold that token, so nothing was sent. It holds: {tokens}.",
+        "withdraw_which": "Which one should I withdraw? Nothing was sent. Say it again with a token or chain name: {tokens}.",
+        "withdraw_preview_limit": "Today's previews are used up, so nothing was sent. Try again tomorrow.",
         "agent_read_failed": "I could not read the agent. Try again shortly.",
         "policy_not_ready": "The policy is not in force yet. Ask again shortly.",
         "policy": "Policy: allowed actions are {actions}. {assets} assets are allowed. {budget} {frozen}",
@@ -254,7 +288,7 @@ MESSAGES = {
         "history_row": "Trade {number}: {date}, {mode}. Gave {gave} {gave_symbol}, received {got} {got_symbol}, {status}.",
         "history_date": "{month} {day} at {time}",
         "history_months": ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
-        "history_modes": {"dry": "dry run", "live": "live"},
+        "history_modes": {"dry": "dry run", "live": "live", "withdraw": "withdrawal"},
         "history_status": {
             "dry": "nothing executed",
             "processing": "processing",
@@ -440,8 +474,8 @@ def say_live_status(view: dict, lang: str) -> str:
     state = view["state"]
     values = {"amount": format_amount(view.get("amount") or "0", lang), "symbol": view.get("symbol")}
     if state == "done":
-        key = "live_done_proof" if view.get("proof") else "live_done"
-        return say(key, lang, **values)
+        key = "withdraw_done" if view.get("withdraw") else "live_done"
+        return say(f"{key}_proof" if view.get("proof") else key, lang, **values)
     if state == "refunded":
         if view.get("amount"):
             return say("live_refunded_part", lang, **values)
@@ -567,6 +601,34 @@ def say_history(entries: list[dict], lang: str) -> str:
         for number, entry in enumerate(entries, start=1)
     ]
     return " ".join([say("history_intro", lang, count=len(entries)), *rows])
+
+
+def say_withdraw(order, lang: str, ttl: int) -> str:
+    """The terms of a withdrawal. The address has a copy button and is never read aloud."""
+    if order.received_text:
+        amount = format_amount(order.received_text, lang)
+        received = say("withdraw_received", lang, amount=amount, symbol=order.symbol)
+    else:
+        received = say("withdraw_received_unknown", lang)
+    usd = format_usd(str(order.usd), lang)
+    if order.left_usd is None:
+        budget = say("withdraw_budget_no_cap", lang, usd=usd)
+    else:
+        budget = say("withdraw_budget", lang, usd=usd, left=format_usd(str(order.left_usd), lang))
+    fee = Decimal(order.fee_usd) if order.fee_usd is not None else None
+    terms = say(
+        "withdraw_terms",
+        lang,
+        mode=say("mode_live", lang),
+        amount=format_amount(order.amount_text, lang),
+        symbol=order.symbol,
+        chain=chain_name(order.chain),
+        received=received,
+        fee=say_fee(fee, lang),
+        budget=budget,
+        ttl=ttl,
+    )
+    return f"{say('withdraw_capped', lang)} {terms}" if order.capped else terms
 
 
 def say_usd_note(amount: str, lang: str) -> str:

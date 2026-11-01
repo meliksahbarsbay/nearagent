@@ -257,3 +257,21 @@ def test_safe_policy_has_every_required_field_and_pays_only_the_owner():
 def test_uncertain_is_never_treated_as_final():
     assert "UNCERTAIN" in PENDING_STATUSES
     assert not PENDING_STATUSES & FINAL_STATUSES
+
+
+def test_withdraw_needs_grant_and_key_even_for_a_preview():
+    api, seen = make_api()
+    run(api.withdraw("agent", USDC, "1", "near", "alice.near", "preview-key-1", dry=True))
+    assert seen[0].url.path == "/v1/agents/agent/withdraw"
+    assert seen[0].headers["X-Grant-Token"] == GRANT
+    assert seen[0].headers["Idempotency-Key"] == "preview-key-1"
+    assert json.loads(seen[0].content) == {
+        "asset": USDC, "amount": "1", "chain": "near", "recipient": "alice.near", "dry": True,
+    }
+
+
+def test_withdraw_without_grant_sends_nothing():
+    api, seen = make_api(grant="")
+    with pytest.raises(GrantRequired):
+        run(api.withdraw("agent", USDC, "1", "near", "alice.near", "preview-key-1"))
+    assert seen == []

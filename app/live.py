@@ -7,6 +7,7 @@ limits come on top of the owner's signed policy, and any doubt stops the swap.
 import asyncio
 import json
 import os
+import re
 import secrets
 import time
 from dataclasses import dataclass, field
@@ -22,8 +23,17 @@ from app.agent_api import (
     live_settings,
     new_idempotency_key,
 )
+from app.amounts import find_amount, first_number, named_tokens, says_all, tokenize
 from app.history import history
-from app.oneclick import QuoteError, find_token, parse_amount, to_atomic, token_amount
+from app.oneclick import (
+    CHAIN_NAMES,
+    SYMBOL_ALIASES,
+    QuoteError,
+    find_token,
+    parse_amount,
+    to_atomic,
+    token_amount,
+)
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_LEDGER = ROOT / "data" / "live_spend.json"
@@ -82,6 +92,13 @@ SPOKEN_REFUSALS = {
     "unsupported_token": "live_refused",
 }
 
+# A sentence that names any address is refused: only the signed address can receive.
+ADDRESS_LIKE = re.compile(
+    r"\b0x[0-9a-fA-F]{6,}\b|\b[0-9a-fA-F]{32,}\b|\b[\w-]+\.(?:near|testnet|eth|sol)\b"
+    r"|\b[1-9A-HJ-NP-Za-km-z]{32,}\b"
+)
+KNOWN_TICKERS = {"USDC", "USDT", "SOL", "ETH", "BTC", "NEAR", "WNEAR", "XRP", "DOGE", "LTC", "ZEC"}
+
 # Tests replace this. Nothing else ever sets it.
 transport: httpx.AsyncBaseTransport | None = None
 # One swap at a time: the wallet refuses a second, and limits must be checked in order.
@@ -117,9 +134,37 @@ class LiveOrder:
 
 
 @dataclass
+class WithdrawOrder:
+    """One withdrawal. The recipient comes from the signed policy, never from the user."""
+
+    request: dict
+    asset: str
+    symbol: str
+    decimals: int
+    amount: str
+    chain: str
+    recipient: str
+    usd: Decimal
+    left_usd: Decimal | None
+    received: str | None
+    fee_usd: str | None
+    capped: bool
+    quoted_at: float = field(default_factory=time.monotonic)
+    idempotency_key: str = field(default_factory=new_idempotency_key)
+
+    @property
+    def amount_text(self) -> str:
+        return scaled(self.amount, self.decimals)
+
+    @property
+    def received_text(self) -> str | None:
+        return scaled(self.received, self.decimals) if self.received else None
+
+
+@dataclass
 class Operation:
     correlation_id: str
-    order: LiveOrder
+    order: LiveOrder | WithdrawOrder
     entry: str = ""
 
 
@@ -206,7 +251,7 @@ def refusal(error: AgentApiError) -> QuoteError:
     return QuoteError(SPOKEN_REFUSALS.get(error.code, "live_refused"), status)
 
 
-async def ensure_active(api: AgentApi, agent_id: str) -> None:
+async def ensure_active(api: AgentApi, agent_id: str) -> dict:
     try:
         data = await api.policy(agent_id)
     except AgentApiError as error:
@@ -218,6 +263,7 @@ async def ensure_active(api: AgentApi, agent_id: str) -> None:
         raise QuoteError("policy_not_ready", 409)
     if policy.get("frozen") is not False:
         raise QuoteError("agent_frozen", 409)
+    return policy
 
 
 async def token_list(api: AgentApi) -> list[dict]:
@@ -428,6 +474,245 @@ async def execute_order(order: LiveOrder) -> str | None:
     return track
 
 
+def withdraw_target(policy: dict) -> tuple[str, str]:
+    """The one address the owner signed. With no single answer, nothing moves."""
+    rules = policy.get("destinations") or {}
+    entries = [e for e in rules.get("list") or [] if e.get("action") == "withdraw"]
+    if "withdraw" not in (policy.get("actions") or []):
+        raise QuoteError("withdraw_no_target", 409)
+    if rules.get("mode") != "only" or len(entries) != 1:
+        raise QuoteError("withdraw_no_target", 409)
+    chain, address = entries[0].get("chain"), entries[0].get("address")
+    if not chain or not address:
+        raise QuoteError("withdraw_no_target", 409)
+    owner = os.getenv("OWNER_ACCOUNT_ID")
+    if owner and owner != address:
+        raise QuoteError("withdraw_no_target", 409)
+    return chain, address
+
+
+def available(row: dict) -> int:
+    raw = row.get("available_raw") if row.get("available_raw") is not None else row.get("balance_raw")
+    return int(raw or 0)
+
+
+def row_names(row: dict) -> set[str]:
+    symbol = str(row.get("symbol", "")).upper()
+    plain = {alias: name for name, alias in SYMBOL_ALIASES.items()}.get(symbol)
+    return {symbol, plain} if plain else {symbol}
+
+
+def holdings_text(rows: list[dict]) -> str:
+    return ", ".join(sorted({str(row.get("symbol")) for row in rows}))
+
+
+def pick_row(rows: list[dict], text: str) -> dict:
+    """Find the one balance a sentence means. A wrong guess here would move the wrong token."""
+    if not rows:
+        raise QuoteError("withdraw_empty", 409)
+    named = named_tokens(text)
+    matches = [row for row in rows if row_names(row) & named]
+    if any(word.isalpha() and word.upper() in KNOWN_TICKERS for word in tokenize(text)) and not matches:
+        raise QuoteError("withdraw_no_token", 409, tokens=holdings_text(rows))
+    choices = matches or rows
+    words = set(tokenize(text))
+    on_chain = [
+        row for row in choices
+        if row.get("blockchain") in words or CHAIN_NAMES.get(row.get("blockchain"), "").lower() in words
+    ]
+    choices = on_chain or choices
+    if len(choices) > 1:
+        raise QuoteError("withdraw_which", 409, tokens=holdings_text(choices))
+    return choices[0]
+
+
+def chosen_amount(text: str, lang: str, row: dict) -> tuple[int, bool]:
+    """Atomic amount and whether the user asked for everything."""
+    decimals = row["decimals"]
+    found = find_amount(text, lang, row_names(row))
+    if found and found.usd:
+        token = {"symbol": row.get("symbol"), "price": row.get("price")}
+        return int(to_atomic(token_amount(found.value, "usd", token), decimals)), False
+    if found:
+        return int(to_atomic(found.value, decimals)), False
+    # A bare "5 çek" must never become "everything", so any number wins over the default.
+    number = first_number(text, lang)
+    if number is not None and not says_all(text):
+        return int(to_atomic(number, decimals)), False
+    return available(row), True
+
+
+def transaction_cap(policy: dict, asset: str) -> int | None:
+    cap = ((policy.get("limits") or {}).get("per_transaction") or {}).get(asset)
+    return int(cap) if cap else None
+
+
+async def read_balances(api: AgentApi, agent_id: str) -> list[dict]:
+    try:
+        listing = await api.balances(agent_id)
+    except (AgentApiError, AgentApiRequestError):
+        raise QuoteError("agent_read_failed", 502) from None
+    return [row for row in listing.get("balances") or [] if available(row) > 0]
+
+
+def withdraw_refusal(error: AgentApiError) -> QuoteError:
+    if error.code == "spend_budget_exceeded":
+        return QuoteError("withdraw_no_budget", 409)
+    if error.code == "policy_limit_exceeded":
+        return QuoteError("withdraw_over_limit", 409)
+    if error.code == "withdraw_preview_limit_reached":
+        return QuoteError("withdraw_preview_limit", 429)
+    return refusal(error)
+
+
+async def preview_withdraw(api: AgentApi, agent_id: str, fields: dict) -> dict:
+    """Ask for a preview under a fresh key. The same key would replay an old answer."""
+    try:
+        data = await api.withdraw(
+            agent_id,
+            fields["asset"],
+            fields["amount"],
+            fields["chain"],
+            fields["recipient"],
+            new_idempotency_key(),
+            dry=True,
+        )
+    except AgentApiError as error:
+        raise withdraw_refusal(error) from None
+    except AgentApiRequestError:
+        raise QuoteError("upstream", 502) from None
+    codes = {w.get("code") for w in data.get("warnings") or []}
+    if "spend_budget_exceeded" in codes:
+        raise QuoteError("withdraw_no_budget", 409)
+    if "policy_limit_exceeded" in codes:
+        raise QuoteError("withdraw_over_limit", 409)
+    blocked = codes & BLOCKING_WARNINGS
+    if blocked:
+        raise QuoteError(SPOKEN_REFUSALS.get(sorted(blocked)[0], "live_refused"), 409)
+    spend = data.get("spend") or {}
+    if spend.get("amount_usd") is None:
+        raise QuoteError("live_no_price", 409)
+    usd = Decimal(str(spend["amount_usd"]))
+    remaining = ((spend.get("budget") or {}).get("daily") or {}).get("remaining_usd")
+    left = Decimal(str(remaining)) if remaining is not None else None
+    if left is not None and usd > left:
+        raise QuoteError("withdraw_no_budget", 409)
+    received = (data.get("quote") or {}).get("amount_out")
+    return {
+        "usd": usd,
+        "left": left - usd if left is not None else None,
+        "received": received if isinstance(received, str) and received.isdigit() else None,
+        "fee_usd": (data.get("fee") or {}).get("amount_usd"),
+    }
+
+
+async def plan_withdraw(api: AgentApi, agent_id: str, text: str, lang: str) -> WithdrawOrder:
+    """Read what would leave and where it would go. Nothing is sent here."""
+    if ADDRESS_LIKE.search(text):
+        raise QuoteError("withdraw_owner_only", 403)
+    policy = await ensure_active(api, agent_id)
+    chain, recipient = withdraw_target(policy)
+    row = pick_row(await read_balances(api, agent_id), text)
+    amount, wants_all = chosen_amount(text, lang, row)
+    if amount <= 0:
+        raise QuoteError("invalid_amount")
+    if amount > available(row):
+        raise QuoteError("live_no_balance", 409)
+    cap = transaction_cap(policy, row["asset_id"])
+    capped = cap is not None and amount > cap
+    if capped and not wants_all:
+        raise QuoteError("withdraw_over_limit", 409)
+    amount = min(amount, cap) if capped else amount
+    fields = {"asset": row["asset_id"], "amount": str(amount), "chain": chain, "recipient": recipient}
+    terms = await preview_withdraw(api, agent_id, fields)
+    return WithdrawOrder(
+        request={"text": text},
+        asset=row["asset_id"],
+        symbol=row["symbol"],
+        decimals=row["decimals"],
+        amount=str(amount),
+        chain=chain,
+        recipient=recipient,
+        usd=terms["usd"],
+        left_usd=terms["left"],
+        received=terms["received"],
+        fee_usd=terms["fee_usd"],
+        capped=capped,
+    )
+
+
+def withdraw_changed(order: WithdrawOrder, terms: dict) -> bool:
+    if time.monotonic() - order.quoted_at > QUOTE_SECONDS:
+        return True
+    if moved(order.usd, terms["usd"]):
+        return True
+    if order.received and terms["received"]:
+        return moved(Decimal(order.received), Decimal(terms["received"]))
+    return bool(order.received) != bool(terms["received"])
+
+
+async def send_withdraw(api: AgentApi, agent_id: str, order: WithdrawOrder) -> dict | None:
+    """Send once, and again with the same key if the answer was lost. None means unknown."""
+    for _ in range(2):
+        try:
+            return await api.withdraw(
+                agent_id,
+                order.asset,
+                order.amount,
+                order.chain,
+                order.recipient,
+                order.idempotency_key,
+            )
+        except AgentApiRequestError:
+            continue
+        except AgentApiError as error:
+            if error.retryable or error.status >= 500:
+                continue
+            raise withdraw_refusal(error) from None
+    return None
+
+
+async def execute_withdraw(order: WithdrawOrder) -> str | None:
+    """Run a confirmed withdrawal. Returns a tracking id, or None if the terms changed."""
+    api = client()
+    agent_id = live_settings().agent_id
+    fields = {
+        "asset": order.asset,
+        "amount": order.amount,
+        "chain": order.chain,
+        "recipient": order.recipient,
+    }
+    async with live_lock:
+        policy = await ensure_active(api, agent_id)
+        # The target is read again: a confirmed order never outlives a changed policy.
+        if withdraw_target(policy) != (order.chain, order.recipient):
+            raise QuoteError("withdraw_no_target", 409)
+        terms = await preview_withdraw(api, agent_id, fields)
+        if withdraw_changed(order, terms):
+            return None
+        entry = history.add(
+            mode="withdraw",
+            gave=order.amount_text,
+            gave_symbol=order.symbol,
+            got=order.received_text or order.amount_text,
+            got_symbol=order.symbol,
+            status="processing",
+            ref=None,
+        )
+        try:
+            result = await send_withdraw(api, agent_id, order)
+        except QuoteError:
+            history.update(entry, status="refused")
+            raise
+    if not result or not result.get("correlation_id"):
+        history.update(entry, status="unknown")
+        raise QuoteError("live_unknown", 502)
+    history.update(entry, ref=result["correlation_id"])
+    track = secrets.token_urlsafe(16)
+    operations[track] = Operation(result["correlation_id"], order, entry)
+    return track
+
+
 def proof_of(details: dict) -> tuple[str | None, str]:
     """A link when there is a transaction hash, otherwise the intent hash itself."""
     tx_hash = details.get("destination_tx_hash") or details.get("tx_hash")
@@ -462,14 +747,19 @@ async def read_operation(track: str) -> dict:
         return {"state": "processing", "final": False}
     state = STATES.get(status.get("status"), "processing")
     details = status.get("details") or {}
-    view = {"state": state, "final": state in FINAL_STATES, "symbol": order.destination["symbol"]}
+    withdrawing = isinstance(order, WithdrawOrder)
+    symbol = order.symbol if withdrawing else order.destination["symbol"]
+    decimals = order.decimals if withdrawing else order.destination["decimals"]
+    view = {"state": state, "final": state in FINAL_STATES, "symbol": symbol, "withdraw": withdrawing}
     if details.get("amount_out"):
-        view["amount"] = scaled(details["amount_out"], order.destination["decimals"])
+        view["amount"] = scaled(details["amount_out"], decimals)
+    elif withdrawing and state == "done":
+        view["amount"] = order.amount_text
     if state == "done":
         view["proof"], view["proof_key"] = proof_of(details)
     if state == "failed":
         view["never_ran"] = bool(details.get("never_executed") or details.get("never_submitted"))
-        if view["never_ran"]:
+        if view["never_ran"] and not withdrawing:
             ledger.release(order.idempotency_key)
     if state != "processing":
         history.update(

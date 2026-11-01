@@ -19,6 +19,7 @@ from app.agent_api import (  # noqa: E402
     AgentApiRequestError,
     agent_ready,
     live_ready,
+    live_settings,
     read_agent_balances,
     read_agent_policy,
 )
@@ -28,7 +29,11 @@ from app.history import history  # noqa: E402
 from app.live import (  # noqa: E402
     QUOTE_MINUTES,
     QUOTE_SECONDS,
+    WithdrawOrder,
+    client as live_client,
     execute_order,
+    execute_withdraw,
+    plan_withdraw,
     prepare_order,
     read_operation,
 )
@@ -56,6 +61,7 @@ from app.messages import (  # noqa: E402
     say_price_usd,
     say_quote,
     say_usd_note,
+    say_withdraw,
 )
 from app.owner import (  # noqa: E402
     OwnerError,
@@ -224,14 +230,37 @@ async def offer_live(
     }
 
 
+async def offer_withdraw(text: str, lang: str) -> dict:
+    """Read what would leave and where it goes. Nothing is sent here."""
+    order = await plan_withdraw(live_client(), live_settings().agent_id, text, lang)
+    kind, question = confirm_question(order.usd, lang, True)
+    return {
+        "action": "withdraw",
+        "mode": "live",
+        "language": lang,
+        "pending": pendings.add(kind, lang, live=True, order=order, seconds=QUOTE_SECONDS),
+        "expires_in": QUOTE_SECONDS,
+        "confirm_button": True,
+        "spoken": f"{say_withdraw(order, lang, QUOTE_MINUTES)} {question}",
+        "copies": [{"key": "owner_address", "value": order.recipient}],
+    }
+
+
 async def run_live(item: Pending) -> dict | JSONResponse:
     """Send a confirmed order, or ask again if anything changed since the user heard it."""
     try:
-        track = await execute_order(item.order)
-        if track is None:
-            offer = await offer_live(**item.order.request, lang=item.lang)
-            offer["spoken"] = f"{say('live_changed', item.lang)} {offer['spoken']}"
-            return offer
+        if isinstance(item.order, WithdrawOrder):
+            track = await execute_withdraw(item.order)
+            if track is None:
+                offer = await offer_withdraw(item.order.request["text"], item.lang)
+                offer["spoken"] = f"{say('live_changed', item.lang)} {offer['spoken']}"
+                return offer
+        else:
+            track = await execute_order(item.order)
+            if track is None:
+                offer = await offer_live(**item.order.request, lang=item.lang)
+                offer["spoken"] = f"{say('live_changed', item.lang)} {offer['spoken']}"
+                return offer
     except QuoteError as error:
         return error_response(error, item.lang)
     return {**reply("live_sent", "live_processing", item.lang), "mode": "live", "track": track}
@@ -486,11 +515,17 @@ def run_history(lang: str) -> dict:
     }
 
 
-async def run_command(command: str, lang: str) -> dict:
+async def run_command(command: str, lang: str, text: str = "", live: bool = False) -> dict:
     if command == "history":
         return run_history(lang)
     if not agent_ready():
         return reply(command, "no_agent", lang)
+    if command == "withdraw":
+        require_live(True)
+        # The page must already say live, so real money is never confirmed under a dry label.
+        if not live:
+            raise QuoteError("withdraw_needs_live", 409)
+        return await offer_withdraw(text, lang)
     if command == "freeze":
         return await run_control("agent_freeze", lang)
     if command == "unfreeze":
@@ -525,7 +560,7 @@ async def ask(data: AskInput, client: OneClick = Depends(get_oneclick)):
             raise QuoteError("too_long")
         if command:
             lang = command[1]
-            return await run_command(*command)
+            return await run_command(*command, text, data.live)
         require_live(data.live)
         try:
             intent = await parse_intent(text)

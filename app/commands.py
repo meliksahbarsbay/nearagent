@@ -8,6 +8,10 @@ import re
 from app.confirm import ASCII_FOLD
 
 COMMANDS = {
+    "withdraw": {
+        "tr": re.compile(r"\b(cek|cekin|cekelim|cekmek istiyorum)\b"),
+        "en": re.compile(r"\bwithdraw\b"),
+    },
     "policy": {
         "tr": re.compile(r"\bpolitika\w*\b.*\b(oku|ne|nedir|soyle|goster|anlat)\b"),
         "en": re.compile(r"\b(read|show|tell|what is|what's)\b.*\bpolicy\b|\bmy policy\b"),

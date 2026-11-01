@@ -37,6 +37,7 @@ TOKEN_NAMES = {
     "solana": "SOL",
     "wnear": "NEAR",
 }
+ALL_WORDS = {"hepsi", "hepsini", "tumu", "tumunu", "tamami", "tamamini", "all", "everything"}
 TOKEN_PATTERN = re.compile(r"\$?\d[\d.,]*\$?|\$|[^\W\d_]+")
 
 
@@ -215,6 +216,25 @@ def read_answer(text: str, lang: str, known: set[str]) -> Amount | None:
     if len(rest) != expected:
         return None
     return Amount(value, usd or dollar_sign, token)
+
+
+def first_number(text: str, lang: str) -> str | None:
+    """Any number at all, with no unit needed. Only a withdrawal uses this."""
+    tokens = tokenize(text)
+    for start in range(len(tokens)):
+        run = read_run(tokens, start, lang)
+        if run is not None:
+            return run[0]
+    return None
+
+
+def says_all(text: str) -> bool:
+    return bool(ALL_WORDS & set(tokenize(text)))
+
+
+def named_tokens(text: str) -> set[str]:
+    """Every word as a ticker, for matching against what the agent holds."""
+    return {ticker(word) for word in tokenize(text)}
 
 
 def number_or_same(text: str, lang: str) -> str:
