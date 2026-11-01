@@ -8,6 +8,7 @@ const TEXT = {
     modeLive: "Mod: Canlı, gerçek para",
     micOn: "Mikrofon açık, dinliyorum.",
     languageSet: "Dil Türkçe oldu.",
+    title: "nearagent: erişilebilir kripto asistanı",
     sentence: "Ne yapmak istiyorsun?",
     send: "Gönder",
     heading: "Sonuç",
@@ -63,6 +64,7 @@ const TEXT = {
     modeLive: "Mode: Live, real money",
     micOn: "Microphone on, listening.",
     languageSet: "Language set to English.",
+    title: "nearagent: an accessible crypto assistant",
     sentence: "What do you want to do?",
     send: "Send",
     heading: "Result",
@@ -215,6 +217,7 @@ function applyLanguage(next) {
   document.documentElement.lang = next;
   result.lang = next;
   const text = TEXT[next];
+  document.title = text.title;
   byId("sentence-label").textContent = text.sentence;
   byId("ask-submit").textContent = text.send;
   byId("result-heading").textContent = text.heading;
