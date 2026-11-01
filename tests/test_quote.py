@@ -237,7 +237,7 @@ def test_unreadable_amount_is_asked_again_with_no_quote(monkeypatch):
     client, sent = make_client()
     use_intent(monkeypatch, action="swap", from_token="USDC", to_token="SOL")
     key = client.post("/api/ask", json={"text": "x"}).json()["pending"]
-    data = client.post("/api/ask", json={"text": "50 dolar", "pending": key}).json()
+    data = client.post("/api/ask", json={"text": "50 kişi", "pending": key}).json()
     assert data["spoken"].startswith("Miktarı anlayamadım.")
     assert data["pending"] == key
     assert sent == []

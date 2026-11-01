@@ -17,7 +17,7 @@ const TEXT = {
     shortcuts:
       "Kısayollar: Enter gönderir ya da onaylar. Esc iptal eder. Alt M mikrofonu açar. Alt R son cevabı tekrar okur. Alt H yardımı okur.",
     help:
-      "Bir cümle yaz ve Enter'a bas, örneğin 2 NEAR'ı USDC'ye çevir. Teklif okununca Enter ya da evet onaylar, Esc ya da hayır iptal eder. Alt M mikrofonu açar. Alt R son cevabı tekrar okur. Ajan komutları: politikamı oku, bütçem ne kadar kaldı, ajanı dondur, ajanı çöz.",
+      "Bir cümle yaz ve Enter'a bas, örneğin 2 NEAR'ı USDC'ye çevir. Teklif okununca Enter ya da evet onaylar, Esc ya da hayır iptal eder. Alt M mikrofonu açar. Alt R son cevabı tekrar okur. Komutlar: cüzdanımda ne var, son işlemlerimi oku, politikamı oku, bütçem ne kadar kaldı, ajanı dondur, ajanı çöz.",
     mic: "Mikrofon",
     confirm: "Onayla",
     live: "Canlı mod",
@@ -43,6 +43,7 @@ const TEXT = {
       to: "Alınan token kimliği",
       proof: "İşlem bağlantısı",
       proof_id: "İşlem kimliği",
+      trade: "İşlem",
     },
   },
   en: {
@@ -61,7 +62,7 @@ const TEXT = {
     shortcuts:
       "Shortcuts: Enter sends or confirms. Escape cancels. Alt M turns on the microphone. Alt R repeats the last reply. Alt H reads the help.",
     help:
-      "Type a sentence and press Enter, for example swap 2 NEAR to USDC. After a quote, Enter or yes confirms, and Escape or no cancels. Alt M turns on the microphone. Alt R repeats the last reply. Agent commands: read my policy, how much budget is left, freeze the agent, unfreeze the agent.",
+      "Type a sentence and press Enter, for example swap 2 NEAR to USDC. After a quote, Enter or yes confirms, and Escape or no cancels. Alt M turns on the microphone. Alt R repeats the last reply. Commands: what is my balance, read my recent trades, read my policy, how much budget is left, freeze the agent, unfreeze the agent.",
     mic: "Microphone",
     confirm: "Confirm",
     live: "Live mode",
@@ -87,6 +88,7 @@ const TEXT = {
       to: "ID of the token to receive",
       proof: "Transaction link",
       proof_id: "Transaction ID",
+      trade: "Trade",
     },
   },
 };
@@ -131,10 +133,11 @@ function renderIds() {
   list.replaceChildren();
   byId("ids-section").hidden = lastIds.length === 0;
   byId("ids-heading").textContent = text.idsHeading;
-  for (const { key, value } of lastIds) {
+  for (const { key, value, number } of lastIds) {
+    const name = number ? `${text.ids[key]} ${number}` : text.ids[key];
     const item = document.createElement("li");
     const label = document.createElement("span");
-    label.textContent = `${text.ids[key]} `;
+    label.textContent = `${name} `;
     // Sighted users can see the value. A screen reader skips it and offers the button.
     const shown = document.createElement("code");
     shown.textContent = value;
@@ -142,7 +145,7 @@ function renderIds() {
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = text.copy;
-    button.setAttribute("aria-label", `${text.ids[key]}: ${text.copy}`);
+    button.setAttribute("aria-label", `${name}: ${text.copy}`);
     button.addEventListener("click", () => copy(value));
     item.append(label, shown, button);
     list.append(item);
@@ -182,7 +185,9 @@ function applyLanguage(next) {
 }
 
 function rememberIds(data) {
-  if (data.proof) {
+  if (data.copies) {
+    lastIds = data.copies;
+  } else if (data.proof) {
     lastIds = [{ key: data.proof_key, value: data.proof }];
   } else if (data.quote) {
     lastIds = [

@@ -74,7 +74,7 @@ def test_request_enforces_schema(keys):
     asyncio.run(parse_intent("x", httpx.MockTransport(handler)))
     schema = bodies[0]["response_format"]["json_schema"]
     assert schema["strict"] is True
-    assert set(schema["schema"]["required"]) == set(Intent.model_fields)
+    assert set(schema["schema"]["required"]) == set(Intent.model_fields) - {"amount_unit", "amount_side"}
 
 
 def test_openai_used_when_near_ai_key_is_missing(keys, monkeypatch):

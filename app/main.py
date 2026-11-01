@@ -19,9 +19,12 @@ from app.agent_api import (  # noqa: E402
     AgentApiRequestError,
     agent_ready,
     live_ready,
+    read_agent_balances,
     read_agent_policy,
 )
+from app.amounts import number_or_same, read_answer  # noqa: E402
 from app.commands import detect_command  # noqa: E402
+from app.history import history  # noqa: E402
 from app.live import QUOTE_MINUTES, execute_order, prepare_order, read_operation  # noqa: E402
 from app.confirm import (  # noqa: E402
     Pending,
@@ -29,7 +32,6 @@ from app.confirm import (  # noqa: E402
     answer_word,
     code_matches,
     new_code,
-    read_amount,
 )
 from app.intent import Intent, ParserUnavailable, parse_intent  # noqa: E402
 from app.messages import (  # noqa: E402
@@ -37,13 +39,17 @@ from app.messages import (  # noqa: E402
     from_atomic,
     say,
     say_assumed,
+    say_balances,
     say_budget,
     say_error,
+    say_history,
     say_large,
     say_live_status,
     say_policy,
     say_price,
+    say_price_usd,
     say_quote,
+    say_usd_note,
 )
 from app.owner import (  # noqa: E402
     OwnerError,
@@ -59,6 +65,7 @@ from app.oneclick import (  # noqa: E402
     find_token,
     parse_amount,
     to_atomic,
+    token_amount,
 )
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
@@ -66,6 +73,7 @@ MAX_TOKEN_TEXT = 64
 MAX_SENTENCE = 300
 LARGE_USD = Decimal(100)
 MAX_CODE_ATTEMPTS = 3
+RECENT_TRADES = 5
 UNFREEZE_COOLDOWN_MINUTES = 10
 ALREADY_DONE = {
     "wallet_already_frozen": "already_frozen",
@@ -161,10 +169,12 @@ async def offer_live(
     to_chain: str | None,
     amount: str,
     lang: str,
+    unit: str = "token",
+    side: str = "from",
 ) -> dict:
     """Quote from the agent's own account and read the terms. Nothing is sent here."""
     order, origin_assumed, destination_assumed = await prepare_order(
-        from_token, from_chain, to_token, to_chain, amount
+        from_token, from_chain, to_token, to_chain, amount, unit, side
     )
     origin, destination = order.origin, order.destination
     assumed = [t for t, flag in ((origin, origin_assumed), (destination, destination_assumed)) if flag]
@@ -173,6 +183,8 @@ async def offer_live(
         order.view(), origin["symbol"], destination["symbol"], min_out, lang, True, QUOTE_MINUTES
     )
     warning = f" {say('high_fee', lang)}" if order.high_fee else ""
+    if unit == "usd":
+        warning += f" {say_usd_note(amount, lang)}"
     kind, question = confirm_question(order.usd, lang, True)
     return {
         "action": "swap",
@@ -207,32 +219,58 @@ async def run_swap(
     amount: str,
     lang: str,
     live: bool = False,
+    unit: str = "token",
+    side: str = "from",
 ) -> dict:
     if live:
-        return await offer_live(from_token, from_chain, to_token, to_chain, amount, lang)
+        return await offer_live(
+            from_token, from_chain, to_token, to_chain, amount, lang, unit, side
+        )
     origin, origin_assumed, destination, destination_assumed = await resolve_pair(
         client, from_token, from_chain, to_token, to_chain
     )
-    atomic = to_atomic(amount, origin["decimals"])
+    # An amount of the bought token is what arrives, so the input floats: EXACT_OUTPUT.
+    exact_out = side == "to"
+    base = destination if exact_out else origin
+    atomic = to_atomic(token_amount(amount, unit, base), base["decimals"])
     body = build_quote_request(
-        origin["assetId"], destination["assetId"], atomic, client.account, dry=True
+        origin["assetId"],
+        destination["assetId"],
+        atomic,
+        client.account,
+        dry=True,
+        swap_type="EXACT_OUTPUT" if exact_out else "EXACT_INPUT",
     )
     result = await client.quote(body)
     details = result["quote"]
     min_out = from_atomic(details["minAmountOut"], destination["decimals"])
     assumed = [t for t, flag in ((origin, origin_assumed), (destination, destination_assumed)) if flag]
-    terms = say_quote(details, origin["symbol"], destination["symbol"], min_out, lang)
+    terms = say_quote(
+        details, origin["symbol"], destination["symbol"], min_out, lang, exact_out=exact_out
+    )
+    if unit == "usd":
+        terms += f" {say_usd_note(amount, lang)}"
+    if exact_out:
+        terms += f" {say('refund_note', lang)}"
     kind, question = confirm_question(Decimal(details.get("amountInUsd") or 0), lang, False)
+    summary = {
+        "gave": details["amountInFormatted"],
+        "gave_symbol": origin["symbol"],
+        "got": details["amountOutFormatted"],
+        "got_symbol": destination["symbol"],
+        "ref": result.get("correlationId"),
+    }
     return {
         "action": "swap",
         "mode": "dry",
         "language": lang,
-        "pending": pendings.add(kind, lang),
+        "pending": pendings.add(kind, lang, summary=summary),
         "confirm_button": False,
         "spoken": f"{terms}{say_assumed(assumed, lang)} {question}",
         "quote": {
             "from": origin["assetId"],
             "to": destination["assetId"],
+            "swapType": "EXACT_OUTPUT" if exact_out else "EXACT_INPUT",
             "amountIn": details["amountInFormatted"],
             "amountOut": details["amountOutFormatted"],
             "minAmountOut": min_out,
@@ -253,10 +291,12 @@ async def run_price(client: OneClick, intent: Intent) -> dict:
     if token.get("price") is None:
         raise QuoteError("no_price", symbol=token["symbol"])
     lang = intent.language
+    usd = intent.amount_unit == "usd"
+    spoken = say_price_usd(amount, token, lang) if usd else say_price(amount, token, lang)
     return {
         "action": "price",
         "language": lang,
-        "spoken": say_price(amount, token, lang) + say_assumed([token] if assumed else [], lang),
+        "spoken": spoken + say_assumed([token] if assumed else [], lang),
     }
 
 
@@ -273,18 +313,36 @@ async def run_intent(client: OneClick, intent: Intent, live: bool = False) -> di
         "to_chain": intent.to_chain,
     }
     if intent.amount:
-        return await run_swap(client, amount=intent.amount, lang=lang, live=live, **swap)
+        return await run_swap(
+            client,
+            amount=intent.amount,
+            lang=lang,
+            live=live,
+            unit=intent.amount_unit,
+            side=intent.amount_side,
+            **swap,
+        )
     # Check the tokens first, so nobody answers a question for a swap that cannot happen.
     await resolve_pair(client, **swap)
     return reply("ask_amount", "missing_amount", lang, pendings.add("amount", lang, swap, live))
 
 
 async def answer_amount(client: OneClick, key: str, item: Pending, text: str) -> dict | JSONResponse:
-    amount = read_amount(text, item.swap["from_token"])
-    if amount is None:
+    tokens = {item.swap["from_token"].upper(), item.swap["to_token"].upper()}
+    answer = read_answer(text, item.lang, tokens)
+    if answer is None:
         return reply("ask_amount", "amount_again", item.lang, key)
+    bought = answer.token == item.swap["to_token"].upper() != item.swap["from_token"].upper()
     try:
-        offer = await run_swap(client, amount=amount, lang=item.lang, live=item.live, **item.swap)
+        offer = await run_swap(
+            client,
+            amount=answer.value,
+            lang=item.lang,
+            live=item.live,
+            unit="usd" if answer.usd else "token",
+            side="to" if bought else "from",
+            **item.swap,
+        )
     except QuoteError as error:
         # The tokens stay valid, so the user can answer again with another amount.
         return error_response(error, item.lang, key)
@@ -377,10 +435,32 @@ async def answer_pending(
     pendings.drop(key)
     if item.live:
         return await run_live(item)
+    history.add(mode="dry", status="dry", **item.summary)
     return {**reply("confirmed", "confirmed_dry", item.lang), "mode": "dry"}
 
 
+def run_history(lang: str) -> dict:
+    """History is local and covers dry runs, so it needs no agent."""
+    try:
+        entries = history.recent(RECENT_TRADES)
+    except (OSError, ValueError):
+        raise QuoteError("history_broken", 503) from None
+    copies = [
+        {"key": "trade", "number": number, "value": entry["ref"]}
+        for number, entry in enumerate(entries, start=1)
+        if entry.get("ref")
+    ]
+    return {
+        "action": "history",
+        "language": lang,
+        "spoken": say_history(entries, lang),
+        "copies": copies,
+    }
+
+
 async def run_command(command: str, lang: str) -> dict:
+    if command == "history":
+        return run_history(lang)
     if not agent_ready():
         return reply(command, "no_agent", lang)
     if command == "freeze":
@@ -388,10 +468,11 @@ async def run_command(command: str, lang: str) -> dict:
     if command == "unfreeze":
         return ask_unfreeze(lang)
     try:
-        data = await read_agent_policy()
+        data = await (read_agent_balances() if command == "balance" else read_agent_policy())
     except (AgentApiError, AgentApiRequestError):
         raise QuoteError("agent_read_failed", 502) from None
-    spoken = say_policy(data, lang) if command == "policy" else say_budget(data, lang)
+    speakers = {"policy": say_policy, "budget": say_budget, "balance": say_balances}
+    spoken = speakers[command](data, lang)
     return {"action": command, "language": lang, "spoken": spoken}
 
 
@@ -432,8 +513,9 @@ async def ask(data: AskInput, client: OneClick = Depends(get_oneclick)):
 async def quote(data: QuoteInput, client: OneClick = Depends(get_oneclick)):
     try:
         require_live(data.live)
+        amount = number_or_same(data.amount, data.lang)
         return await run_swap(
-            client, data.from_token, None, data.to_token, None, data.amount, data.lang, data.live
+            client, data.from_token, None, data.to_token, None, amount, data.lang, data.live
         )
     except QuoteError as error:
         return error_response(error, data.lang)

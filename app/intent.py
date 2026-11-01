@@ -9,6 +9,7 @@ from typing import Literal
 import httpx
 from pydantic import BaseModel, ValidationError
 
+from app.amounts import USD_NAMES, find_amount, tokenize
 from app.oneclick import CHAIN_NAMES, QuoteError
 
 log = logging.getLogger("nearagent.intent")
@@ -18,6 +19,8 @@ DEFAULT_NEAR_AI_MODEL = "z-ai/glm-5.3-flash"
 DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
 DEFAULT_OPENAI_MODEL = "gpt-6-luna"
 TIMEOUT_SECONDS = 30
+DEFAULT_PAYMENT_TOKEN = "USDC"
+HOW_MANY = re.compile(r"\b(kac|how many|how much)\b")
 
 CHAIN_ALIASES = {
     "arbitrum": "arb",
@@ -47,7 +50,9 @@ action:
 - swap: the user wants to convert, swap, exchange, or sell one token for another, or to
   move a named token from one chain to another, with words like send, transfer, gönder,
   aktar, or taşı. "USDT'yi Ethereum'dan Polygon'a aktar" is a swap, with USDT on both
-  sides.
+  sides. Buying is a swap too, with words like buy or al. The bought token is to_token,
+  and from_token is null unless the user names what they pay with. "50 dolarlık SOL al"
+  has to_token SOL and from_token null.
 - price: the user asks what a token is worth.
 - help: anything else, including greetings and questions about what you can do. Sending
   to a person or a wallet address is help, because that is not a swap.
@@ -104,6 +109,9 @@ class Intent(BaseModel):
     to_token: str | None = None
     to_chain: str | None = None
     language: Literal["tr", "en"]
+    # Set in code by apply_amount, never by the model.
+    amount_unit: Literal["token", "usd"] = "token"
+    amount_side: Literal["from", "to"] = "from"
 
 
 @dataclass
@@ -172,6 +180,39 @@ def clean(intent: Intent) -> Intent:
     )
 
 
+def asks_how_many(text: str) -> bool:
+    return bool(HOW_MANY.search(" ".join(tokenize(text))))
+
+
+def apply_amount(text: str, intent: Intent) -> Intent:
+    """Replace the model's amount with one read in code, and say which side it belongs to.
+
+    Dollars are not a token here, so a model answer of USD means no source was named. A
+    sentence that names only what to buy pays with USDC.
+    """
+    if intent.action == "help":
+        return intent
+    from_token = None if (intent.from_token or "") in USD_NAMES else intent.from_token
+    known = {token for token in (from_token, intent.to_token) if token}
+    found = find_amount(text, intent.language, known)
+    changes: dict = {"from_token": from_token}
+    if found:
+        changes["amount"] = found.value
+        changes["amount_unit"] = "usd" if found.usd else "token"
+    # "50 dolar kaç SOL" asks a question, and a question must never become an offer.
+    if found and found.usd and intent.action == "swap" and asks_how_many(text):
+        token = intent.to_token or from_token
+        return intent.model_copy(
+            update={**changes, "action": "price", "from_token": token, "to_token": None}
+        )
+    if intent.action == "swap" and found:
+        buying = found.token == intent.to_token and found.token != from_token
+        if intent.to_token and (buying or not from_token):
+            changes["amount_side"] = "to"
+            changes["from_token"] = from_token or DEFAULT_PAYMENT_TOKEN
+    return intent.model_copy(update=changes)
+
+
 def fix_turkish_source_chain(text: str, intent: Intent) -> Intent:
     """A bare Turkish locative, as in Solana'da, says where the swap starts.
 
@@ -208,7 +249,8 @@ async def ask_provider(
         response = await client.post("chat/completions", json=body, headers=headers)
     response.raise_for_status()
     content = response.json()["choices"][0]["message"]["content"]
-    return fix_turkish_source_chain(text, clean(Intent.model_validate_json(content)))
+    intent = clean(Intent.model_validate_json(content))
+    return apply_amount(text, fix_turkish_source_chain(text, intent))
 
 
 async def parse_intent(text: str, transport: httpx.AsyncBaseTransport | None = None) -> Intent:

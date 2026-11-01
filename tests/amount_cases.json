@@ -1,0 +1,16 @@
+[
+  {"text": "50 dolarlık SOL al", "expected": {"action": "swap", "amount": "50", "from_token": "USDC", "to_token": "SOL", "amount_unit": "usd", "amount_side": "to", "language": "tr"}},
+  {"text": "elli dolarlık NEAR al", "expected": {"action": "swap", "amount": "50", "from_token": "USDC", "to_token": "NEAR", "amount_unit": "usd", "amount_side": "to", "language": "tr"}},
+  {"text": "yarım SOL'u USDC'ye çevir", "expected": {"action": "swap", "amount": "0.5", "from_token": "SOL", "to_token": "USDC", "amount_unit": "token", "amount_side": "from", "language": "tr"}},
+  {"text": "bir buçuk NEAR'ı USDC'ye çevir", "expected": {"action": "swap", "amount": "1.5", "from_token": "NEAR", "to_token": "USDC", "amount_unit": "token", "amount_side": "from", "language": "tr"}},
+  {"text": "1.000 USDC'yi SOL'a çevir", "expected": {"action": "swap", "amount": "1000", "from_token": "USDC", "to_token": "SOL", "amount_unit": "token", "amount_side": "from", "language": "tr"}},
+  {"text": "1,5 ETH'yi USDC'ye çevir", "expected": {"action": "swap", "amount": "1.5", "from_token": "ETH", "to_token": "USDC", "amount_unit": "token", "amount_side": "from", "language": "tr"}},
+  {"text": "2 SOL al", "expected": {"action": "swap", "amount": "2", "from_token": "USDC", "to_token": "SOL", "amount_unit": "token", "amount_side": "to", "language": "tr"}},
+  {"text": "50 dolar kaç SOL", "expected": {"action": "price", "amount": "50", "from_token": "SOL", "amount_unit": "usd", "language": "tr"}},
+  {"text": "buy fifty dollars of SOL", "expected": {"action": "swap", "amount": "50", "from_token": "USDC", "to_token": "SOL", "amount_unit": "usd", "amount_side": "to", "language": "en"}},
+  {"text": "buy $50 of NEAR", "expected": {"action": "swap", "amount": "50", "from_token": "USDC", "to_token": "NEAR", "amount_unit": "usd", "amount_side": "to", "language": "en"}},
+  {"text": "swap half a SOL to USDC", "expected": {"action": "swap", "amount": "0.5", "from_token": "SOL", "to_token": "USDC", "amount_unit": "token", "amount_side": "from", "language": "en"}},
+  {"text": "convert 1,000 USDC to SOL", "expected": {"action": "swap", "amount": "1000", "from_token": "USDC", "to_token": "SOL", "amount_unit": "token", "amount_side": "from", "language": "en"}},
+  {"text": "convert one and a half NEAR to USDC", "expected": {"action": "swap", "amount": "1.5", "from_token": "NEAR", "to_token": "USDC", "amount_unit": "token", "amount_side": "from", "language": "en"}},
+  {"text": "sell 50 dollars of SOL for USDC", "expected": {"action": "swap", "amount": "50", "from_token": "SOL", "to_token": "USDC", "amount_unit": "usd", "amount_side": "from", "language": "en"}}
+]

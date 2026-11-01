@@ -124,13 +124,18 @@ def to_atomic(amount: str, decimals: int) -> str:
 
 
 def build_quote_request(
-    origin_asset: str, destination_asset: str, amount: str, account: str, dry: bool
+    origin_asset: str,
+    destination_asset: str,
+    amount: str,
+    account: str,
+    dry: bool,
+    swap_type: str = "EXACT_INPUT",
 ) -> dict:
-    """Build a quote body. Dry and live share this path: only `dry` differs."""
+    """Build a quote body. With EXACT_OUTPUT, `amount` is what the user receives."""
     deadline = datetime.now(timezone.utc) + timedelta(minutes=QUOTE_TTL_MINUTES)
     return {
         "dry": dry,
-        "swapType": "EXACT_INPUT",
+        "swapType": swap_type,
         "slippageTolerance": SLIPPAGE_BPS,
         "originAsset": origin_asset,
         "depositType": "INTENTS",
@@ -142,6 +147,16 @@ def build_quote_request(
         "recipientType": "INTENTS",
         "deadline": deadline.isoformat(timespec="milliseconds").replace("+00:00", "Z"),
     }
+
+
+def token_amount(amount: str, unit: str, token: dict) -> str:
+    """Turn dollars into a human token amount at the token's current price."""
+    if unit != "usd":
+        return amount
+    if token.get("price") in (None, 0):
+        raise QuoteError("no_price", symbol=token["symbol"])
+    value = parse_amount(amount) / Decimal(str(token["price"]))
+    return f"{value:f}"[:MAX_AMOUNT_CHARS]
 
 
 class OneClick:

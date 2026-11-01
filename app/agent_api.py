@@ -173,6 +173,13 @@ async def read_agent_policy(transport: httpx.AsyncBaseTransport | None = None) -
     return await api.policy(settings.agent_id)
 
 
+async def read_agent_balances(transport: httpx.AsyncBaseTransport | None = None) -> dict:
+    """Read the balance. This client has no grant token either."""
+    settings = live_settings()
+    api = AgentApi(settings.api_key, settings.base_url, transport=transport)
+    return await api.balances(settings.agent_id)
+
+
 class AgentApi:
     def __init__(
         self,

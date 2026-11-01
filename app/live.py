@@ -22,7 +22,8 @@ from app.agent_api import (
     live_settings,
     new_idempotency_key,
 )
-from app.oneclick import QuoteError, find_token, to_atomic
+from app.history import history
+from app.oneclick import QuoteError, find_token, parse_amount, to_atomic, token_amount
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_LEDGER = ROOT / "data" / "live_spend.json"
@@ -119,6 +120,7 @@ class LiveOrder:
 class Operation:
     correlation_id: str
     order: LiveOrder
+    entry: str = ""
 
 
 operations: dict[str, Operation] = {}
@@ -291,6 +293,8 @@ async def prepare_order(
     to_token: str,
     to_chain: str | None,
     amount: str,
+    unit: str = "token",
+    side: str = "from",
 ) -> tuple[LiveOrder, bool, bool]:
     """Quote a swap and check it. Nothing is sent. Returns the two assumed-chain flags."""
     api = client()
@@ -303,7 +307,7 @@ async def prepare_order(
     destination, destination_assumed = find_token(tokens, to_token, to_chain)
     if origin["assetId"] == destination["assetId"]:
         raise QuoteError("same_token")
-    atomic = to_atomic(amount, origin["decimals"])
+    atomic = to_atomic(input_amount(amount, unit, side, origin, destination), origin["decimals"])
     fields = {"origin": origin, "destination": destination, "amount": atomic}
     terms = await fresh_quote(api, agent_id, fields)
     check_limits(terms["usd"])
@@ -314,6 +318,8 @@ async def prepare_order(
             "to_token": to_token,
             "to_chain": to_chain,
             "amount": amount,
+            "unit": unit,
+            "side": side,
         },
         origin=origin,
         destination=destination,
@@ -327,6 +333,19 @@ async def prepare_order(
         high_fee="high_fee" in terms["warnings"],
     )
     return order, origin_assumed, destination_assumed
+
+
+def input_amount(amount: str, unit: str, side: str, origin: dict, destination: dict) -> str:
+    """The Agent API takes an exact input only, so every amount becomes one."""
+    for token in (origin, destination) if unit == "usd" or side == "to" else ():
+        if not token.get("price"):
+            raise QuoteError("live_no_price", 409)
+    if unit == "usd":
+        return token_amount(amount, "usd", origin)
+    if side == "to":
+        value = parse_amount(amount) * Decimal(str(destination["price"]))
+        return token_amount(f"{value:f}", "usd", origin)
+    return amount
 
 
 def moved(before: Decimal, after: Decimal) -> bool:
@@ -386,11 +405,26 @@ async def execute_order(order: LiveOrder) -> str | None:
         check_limits(terms["usd"])
         # Counted before sending: a crash must never leave spending uncounted.
         ledger.reserve(order.idempotency_key, terms["usd"])
-        result = await send_swap(api, agent_id, order)
+        entry = history.add(
+            mode="live",
+            gave=order.amount_in_text,
+            gave_symbol=order.origin["symbol"],
+            got=scaled(terms["amount_out"], order.destination["decimals"]),
+            got_symbol=order.destination["symbol"],
+            status="processing",
+            ref=None,
+        )
+        try:
+            result = await send_swap(api, agent_id, order)
+        except QuoteError:
+            history.update(entry, status="refused")
+            raise
     if not result or not result.get("correlation_id"):
+        history.update(entry, status="unknown")
         raise QuoteError("live_unknown", 502)
+    history.update(entry, ref=result["correlation_id"])
     track = secrets.token_urlsafe(16)
-    operations[track] = Operation(result["correlation_id"], order)
+    operations[track] = Operation(result["correlation_id"], order, entry)
     return track
 
 
@@ -437,6 +471,13 @@ async def read_operation(track: str) -> dict:
         view["never_ran"] = bool(details.get("never_executed") or details.get("never_submitted"))
         if view["never_ran"]:
             ledger.release(order.idempotency_key)
+    if state != "processing":
+        history.update(
+            operation.entry,
+            status=state,
+            got=view.get("amount"),
+            ref=view.get("proof"),
+        )
     if view["final"]:
         operations.pop(track, None)
     return view

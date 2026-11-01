@@ -23,7 +23,9 @@ Swap interfaces are visual: charts, popups, and icon-only buttons. A blind user 
 - Voice input through the browser's Web Speech API. It uses Turkish or English to match the page, announces `Dinliyorum` and `Anladım: ...`, and writes what it heard into the text box. It never sends by itself: you check the text and press Enter.
 - An Advanced section keeps a field-based form, `POST /api/quote`, which works with no keys.
 - Dry mode by default. A dry confirmation only replies `Deneme modu: işlem yapılmadı.`
-- Agent commands, typed or spoken: `politikamı oku`, `bütçem ne kadar kaldı`, `ajanı dondur`, and `ajanı çöz`, or `read my policy`, `how much budget is left`, `freeze the agent`, and `unfreeze the agent`. With no agent they reply `Ajan cüzdanı kurulmadı`.
+- Amounts as people say them, read in code: `yarım SOL`, `bir buçuk NEAR`, `half a SOL`, `one and a half`, `1.000`, and `1,5`. Dollars work too: `50 dolarlık SOL al` and `fifty dollars of SOL`.
+- `son işlemlerimi oku` or `read my recent trades` reads the last 5 confirmed trades, dry and live, with date, what was given and received, and status. Long identifiers stay out of the sentence, and each trade has a copy button.
+- Agent commands, typed or spoken: `cüzdanımda ne var`, `politikamı oku`, `bütçem ne kadar kaldı`, `ajanı dondur`, and `ajanı çöz`, or `what's my balance`, `read my policy`, `how much budget is left`, `freeze the agent`, and `unfreeze the agent`. With no agent they reply `Ajan cüzdanı kurulmadı`. The wallet is read token by token, with dollar values.
 - `ajanı dondur` is the emergency stop. It takes one step, needs no language model, and cuts through any open question, so the command itself is the owner's approval. It signs with the owner key and reports success only after the API confirms it.
 - `ajanı çöz` signs nothing at first. It says what would happen and gives a six digit code, and only that code signs. Enter and `evet` do not. Three wrong codes end the attempt.
 - A live mode switch in the Advanced section. It stays off with the reply `Canlı mod için ajan cüzdanı kurulmadı` unless `LIVE_ENABLED=true` and the Agent API key, `AGENT_ID`, and `GRANT_TOKEN` are all set.
@@ -114,7 +116,7 @@ Sentences such as `1 SOL kaç dolar` need a key. Copy `.env.example` to `.env`, 
 
 ## Try it: do X, see Y
 
-Prices below are examples, so your numbers will differ. Steps 3 to 10 and step 12 need a key. Each step starts from an empty text box.
+Prices below are examples, so your numbers will differ. Steps 3 to 10, 12, and 13 need a key. Each step starts from an empty text box.
 
 1. Do: run `python -m pytest -q`. See: all tests pass, with no network calls.
 2. Do: open http://127.0.0.1:8000 and press Tab. See: focus lands on the text box labelled `Ne yapmak istiyorsun?`, and a screen reader also reads the shortcuts.
@@ -126,11 +128,13 @@ Prices below are examples, so your numbers will differ. Steps 3 to 10 and step 1
 8. Do: type `swap 2 NEAR to USDC` and press Enter, then Tab to the first `Copy` button and press Enter. See: `Copied.` Press Esc to cancel the quote.
 9. Do: type `merhaba` and press Enter. See: a short Turkish help message. Then press Alt+H. See: how to use the page and its shortcuts.
 10. Do: type `5 ABCD'yi SOL'a çevir` and press Enter. See: `ABCD tokenini bulamadım. Token adını kontrol edip yeniden yaz.`
-11. Do: type `politikamı oku` and press Enter, then do the same with `bütçem ne kadar kaldı`, `ajanı dondur`, and `ajanı çöz`. See: `Ajan cüzdanı kurulmadı. Kurulum bitince yeniden dene.` each time. This step needs no key.
+11. Do: type `politikamı oku` and press Enter, then do the same with `cüzdanımda ne var`, `bütçem ne kadar kaldı`, `ajanı dondur`, and `ajanı çöz`. See: `Ajan cüzdanı kurulmadı. Kurulum bitince yeniden dene.` each time. This step needs no key.
 12. Do: in Chrome or Edge, press Alt+M and allow the microphone, then say `bir SOL kaç dolar`. See: `Dinliyorum`, then `Anladım: ...`, and the text in the box. Nothing is sent until you press Enter.
-13. Do: Tab to the Advanced section and press Enter to open it, then press Enter on the `Canlı mod` button. See: `Canlı mod için ajan cüzdanı kurulmadı. Deneme modunda devam edebilirsin.` This step needs no key.
-14. Do: Tab to the submit button in the Advanced section and press Enter. See: a dry quote from the field-based form, with focus back in the text box for your answer. This step needs no key.
-15. Do: call the API directly:
+13. Do: type `50 dolarlık SOL al` and press Enter. See: `Veriyorsun: en çok ...`, then `Alıyorsun: tam ...`, because the amount you named is what arrives. Then type `evet` and press Enter. This step needs a key.
+14. Do: type `son işlemlerimi oku` and press Enter. See: the date, what was given and received, and the status, with a `Kopyala` button for each trade and no long identifiers read aloud. This step needs a confirmed quote, and no key if it came from the Advanced form.
+15. Do: Tab to the Advanced section and press Enter to open it, then press Enter on the `Canlı mod` button. See: `Canlı mod için ajan cüzdanı kurulmadı. Deneme modunda devam edebilirsin.` This step needs no key.
+16. Do: Tab to the submit button in the Advanced section and press Enter. See: a dry quote from the field-based form, with focus back in the text box for your answer. This step needs no key.
+17. Do: call the API directly:
 
 ```sh
 curl -X POST http://127.0.0.1:8000/api/quote -H "Content-Type: application/json" -d "{\"from_token\":\"NEAR\",\"to_token\":\"USDC\",\"amount\":\"1\",\"lang\":\"en\"}"
@@ -140,22 +144,28 @@ See: JSON with `"mode":"dry"`, a `spoken` sentence, a `quote` object, a `correla
 
 ## Parser evaluation
 
-`tests/intent_cases.json` holds 30 sentences, 15 Turkish and 15 English, with expected JSON. `python -m pytest -m live` compares a real provider with them. This run needs a key and costs a small amount.
+`tests/intent_cases.json` holds 30 sentences, 15 Turkish and 15 English, with expected JSON. `tests/amount_cases.json` adds 14 sentences on amounts. `python -m pytest -m live` compares a real provider with them. This run needs a key and costs a small amount.
 
-Latest result with OpenAI `gpt-6-luna`: 30 of 30, in three runs in a row. The first run scored 29 of 30, and repeated runs showed two sentences that failed some of the time. The prompt and one rule in code were then changed after seeing those failures, so this score is not from unseen data. The rule moves a chain to the source side when Turkish says `Solana'da`, because the model sometimes put it on the wrong side.
+Latest result with OpenAI `gpt-6-luna`: 44 of 44, in three runs in a row. Earlier runs showed sentences that failed some of the time, and the prompt and code rules were changed after seeing those failures, so this score is not from unseen data. Code decides three things the model got wrong at times: a chain after Turkish `Solana'da` is the source, amounts are read in code, and `50 dolar kaç SOL` is a question, not an offer.
 
 NEAR AI Cloud has not been measured on this set yet.
 
 ## Known limits
 
 - `NEAR` maps to `wNEAR`, because 1Click lists NEAR that way on the NEAR chain.
+- `1.000` follows the sentence's language: a thousand in Turkish, and one in English. The quote reads the amount back before you confirm.
+- A number counts only when a token or a dollar word follows it, so `bir` as a plain word is not read as an amount. A number with no such word falls back to what the language model read.
+- A sentence that buys without saying how to pay uses USDC, and the quote says so.
+- Dollar amounts use the token's current list price, so the real value can differ slightly. In dry mode a bought amount uses `EXACT_OUTPUT`. The Agent API takes an exact input only, so in live mode every amount becomes the input that matches it at the current price.
+- Trade history is stored in `data/history.json` on this computer. It is a convenience, and the Agent API holds the real record of a live swap. A swap still running when the app restarts stays marked as processing.
+- Reading the wallet was tested against a stand-in, not the real Agent API.
 - Some quotes fail upstream with no specific reason, for example when the amount is too low. The app then gives a general spoken message.
 - Prices come from the 1Click token list, so they may be a few minutes old.
 - Sending to a person or a wallet address is not supported. Those sentences get the help reply.
 - 1Click reports no total fee, so the spoken fee is `amountInUsd` minus `amountOutUsd`. It covers fees and price difference together.
 - Dry quotes return no deadline, so the spoken validity is the 10 minutes the app requests.
 - Amounts are rounded down, so a guaranteed minimum is never read out higher than it is. Very small amounts keep four significant digits, even past six decimals, or they would read as zero.
-- An answer to `how much` must be a number, or a simple word such as `yarım` or `two`. `50 dolar` and `1.000` are asked again, because they could mean a different amount.
+- An answer to `how much` must be only an amount, such as `yarım`, `bir buçuk`, `50 dolar`, or `50 USDC`. A unit that is neither dollars nor one of the swap's tokens is asked again.
 - Open questions live in server memory, so a restart ends them and the page says the quote expired.
 - Tests cover the server. The page's keyboard behaviour was checked by hand in Chrome.
 - Voice recognition was checked with a stand-in recognizer, not a real microphone. Chrome and Edge may send audio to their own speech service, unlike sentence parsing on NEAR AI Cloud.

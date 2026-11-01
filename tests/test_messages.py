@@ -3,7 +3,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.confirm import PendingStore, answer_word, read_amount
+from app.confirm import PendingStore, answer_word
 from app.messages import (
     MESSAGES,
     fee_usd,
@@ -167,29 +167,6 @@ def test_long_durations_use_minutes():
 )
 def test_answer_word(text, expected):
     assert answer_word(text) == expected
-
-
-@pytest.mark.parametrize(
-    "text, expected",
-    [
-        ("10", "10"),
-        ("1,5", "1,5"),
-        ("0.25", "0.25"),
-        ("50 USDC", "50"),
-        ("50 usdc'yi", "50"),
-        ("yarım", "0.5"),
-        ("iki", "2"),
-        ("half", "0.5"),
-        ("50 dolar", None),
-        ("50 SOL", None),
-        ("1.000", None),
-        ("1,000", None),
-        ("çok", None),
-        ("", None),
-    ],
-)
-def test_read_amount(text, expected):
-    assert read_amount(text, "USDC") == expected
 
 
 def test_store_drops_the_oldest_question_when_full(monkeypatch):

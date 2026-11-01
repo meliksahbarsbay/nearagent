@@ -3,6 +3,7 @@
 Every error says what happened and what to do next, and never carries a code.
 """
 import re
+from datetime import datetime
 from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 
 from app.oneclick import QUOTE_TTL_MINUTES, chain_name
@@ -90,9 +91,41 @@ MESSAGES = {
             "Yaklaşık {words} dolar mı dedin? Evet yaz ya da Onayla düğmesine bas. "
             "Değilse hayır yaz ya da Esc'e bas."
         ),
+        "give_exact": "",
+        "give_most": "en çok ",
+        "get_about": "yaklaşık ",
+        "get_exact": "tam ",
+        "usd_note": "Söylediğin {usd} dolar güncel fiyatla çevrildi.",
+        "refund_note": "Artan para iade edilir.",
+        "price_usd": "{usd} dolar yaklaşık {amount} {symbol}.",
+        "balance_empty": "Cüzdanın boş. Para yatırınca burada görünür.",
+        "balance_intro": "Cüzdanında:",
+        "balance_row": "{amount} {symbol}, yaklaşık {usd} dolar.",
+        "balance_row_tiny": "{amount} {symbol}, 0,01 dolardan az.",
+        "balance_row_no_price": "{amount} {symbol}, dolar karşılığı bilinmiyor.",
+        "balance_total": "Toplam yaklaşık {usd} dolar.",
+        "history_empty": "Henüz kayıtlı işlem yok. Bir teklifi onaylayınca burada görünür.",
+        "history_broken": "İşlem geçmişi okunamadı. Geçmiş dosyası düzelene kadar yeniden dene.",
+        "history_intro": "Son {count} işlem.",
+        "history_row": "İşlem {number}: {date}, {mode}. {gave} {gave_symbol} verildi, {got} {got_symbol} alındı, {status}.",
+        "history_date": "{day} {month}, saat {time}",
+        "history_months": ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"],
+        "history_modes": {"dry": "deneme", "live": "canlı"},
+        "history_status": {
+            "dry": "işlem yapılmadı",
+            "processing": "işleniyor",
+            "uncertain": "sonuç kesinleşmedi",
+            "approval": "onay bekliyor",
+            "done": "tamamlandı",
+            "refunded": "iade edildi",
+            "failed": "başarısız",
+            "review": "incelemede",
+            "refused": "gönderilmedi",
+            "unknown": "sonuç belirsiz",
+        },
         "quote": (
-            "{mode} Veriyorsun: {amount_in} {symbol_in}. "
-            "Alıyorsun: yaklaşık {amount_out} {symbol_out}. "
+            "{mode} Veriyorsun: {give}{amount_in} {symbol_in}. "
+            "Alıyorsun: {get}{amount_out} {symbol_out}. "
             "En az garanti: {min_out} {symbol_out}. {fee} "
             "{duration} Teklif {ttl} dakika geçerli."
         ),
@@ -198,9 +231,41 @@ MESSAGES = {
             "Did you mean about {words} dollars? Type yes or press the Confirm button. "
             "If not, type no or press Escape."
         ),
+        "give_exact": "",
+        "give_most": "at most ",
+        "get_about": "about ",
+        "get_exact": "exactly ",
+        "usd_note": "Your {usd} dollars were converted at the current price.",
+        "refund_note": "Any excess is refunded.",
+        "price_usd": "{usd} dollars is about {amount} {symbol}.",
+        "balance_empty": "Your wallet is empty. Funds appear here once deposited.",
+        "balance_intro": "In your wallet:",
+        "balance_row": "{amount} {symbol}, about {usd} dollars.",
+        "balance_row_tiny": "{amount} {symbol}, under 0.01 dollars.",
+        "balance_row_no_price": "{amount} {symbol}, dollar value unknown.",
+        "balance_total": "About {usd} dollars in total.",
+        "history_empty": "There are no saved trades yet. They appear here once you confirm a quote.",
+        "history_broken": "The trade history could not be read. Try again once that file is fixed.",
+        "history_intro": "Last {count} trades.",
+        "history_row": "Trade {number}: {date}, {mode}. Gave {gave} {gave_symbol}, received {got} {got_symbol}, {status}.",
+        "history_date": "{month} {day} at {time}",
+        "history_months": ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+        "history_modes": {"dry": "dry run", "live": "live"},
+        "history_status": {
+            "dry": "nothing executed",
+            "processing": "processing",
+            "uncertain": "not final",
+            "approval": "awaiting approval",
+            "done": "done",
+            "refunded": "refunded",
+            "failed": "failed",
+            "review": "under review",
+            "refused": "not sent",
+            "unknown": "result unknown",
+        },
         "quote": (
-            "{mode} You give: {amount_in} {symbol_in}. "
-            "You get: about {amount_out} {symbol_out}. "
+            "{mode} You give: {give}{amount_in} {symbol_in}. "
+            "You get: {get}{amount_out} {symbol_out}. "
             "Guaranteed minimum: {min_out} {symbol_out}. {fee} "
             "{duration} Quote valid for {ttl} minutes."
         ),
@@ -333,7 +398,7 @@ def say_duration(seconds: int, lang: str) -> str:
     return say("minutes", lang, count=round(seconds / 60))
 
 
-def fee_usd(quote: dict) -> Decimal | None:
+def fee_usd(quote: dict, exact_out: bool = False) -> Decimal | None:
     """1Click reports no total fee, so this is the value lost between input and output.
 
     It covers fees and price difference together. Zero means no USD value was given.
@@ -342,6 +407,9 @@ def fee_usd(quote: dict) -> Decimal | None:
     value_out = Decimal(quote.get("amountOutUsd") or 0)
     if value_in <= 0 or value_out <= 0:
         return None
+    if exact_out and quote.get("minAmountIn") and quote.get("amountIn"):
+        # amountIn carries a slippage buffer that is refunded, so it is not a cost.
+        value_in *= Decimal(quote["minAmountIn"]) / Decimal(quote["amountIn"])
     return max(value_in - value_out, Decimal(0))
 
 
@@ -383,17 +451,20 @@ def say_quote(
     lang: str,
     live: bool = False,
     ttl: int = QUOTE_TTL_MINUTES,
+    exact_out: bool = False,
 ) -> str:
     return say(
         "quote",
         lang,
         mode=say("mode_live" if live else "mode_dry", lang),
+        give=say("give_most" if exact_out else "give_exact", lang),
+        get=say("get_exact" if exact_out else "get_about", lang),
         amount_in=format_amount(quote["amountInFormatted"], lang),
         symbol_in=symbol_in,
         amount_out=format_amount(quote["amountOutFormatted"], lang),
         min_out=format_amount(min_out, lang),
         symbol_out=symbol_out,
-        fee=say_fee(fee_usd(quote), lang),
+        fee=say_fee(fee_usd(quote, exact_out), lang),
         duration=say_time(quote["timeEstimate"], lang),
         ttl=ttl,
     )
@@ -429,6 +500,80 @@ def say_policy(data: dict, lang: str) -> str:
 
 def say_all_assets(lang: str) -> str:
     return "Tüm" if lang == "tr" else "All"
+
+
+def say_balances(data: dict, lang: str) -> str:
+    """Token by token, with dollars. Empty rows are skipped."""
+    rows = []
+    total = Decimal(0)
+    entries = [
+        e for e in data.get("balances") or []
+        if e.get("balance") is not None and Decimal(e["balance"]) > 0
+    ]
+    symbols = [e.get("symbol") for e in entries]
+    for entry in entries:
+        amount = Decimal(entry["balance"])
+        symbol = entry.get("symbol")
+        if symbols.count(symbol) > 1:
+            symbol = f"{symbol} ({chain_name(entry.get('blockchain', ''))})"
+        values = {"amount": format_amount(str(amount), lang), "symbol": symbol}
+        price = entry.get("price")
+        if price is None:
+            rows.append(say("balance_row_no_price", lang, **values))
+            continue
+        usd = amount * Decimal(str(price))
+        total += usd
+        key = "balance_row_tiny" if usd < SMALLEST_FEE else "balance_row"
+        rows.append(say(key, lang, usd=format_usd(str(usd), lang), **values))
+    if not rows:
+        return say("balance_empty", lang)
+    parts = [say("balance_intro", lang), *rows]
+    if len(rows) > 1 and total >= SMALLEST_FEE:
+        parts.append(say("balance_total", lang, usd=format_usd(str(total), lang)))
+    return " ".join(parts)
+
+
+def say_date(moment: str, lang: str) -> str:
+    local = datetime.fromisoformat(moment).astimezone()
+    month = MESSAGES[lang]["history_months"][local.month - 1]
+    return say("history_date", lang, day=local.day, month=month, time=local.strftime("%H:%M"))
+
+
+def say_history(entries: list[dict], lang: str) -> str:
+    if not entries:
+        return say("history_empty", lang)
+    table = MESSAGES[lang]
+    rows = [
+        say(
+            "history_row",
+            lang,
+            number=number,
+            date=say_date(entry["at"], lang),
+            mode=table["history_modes"][entry["mode"]],
+            gave=format_amount(entry["gave"], lang),
+            gave_symbol=entry["gave_symbol"],
+            got=format_amount(entry["got"], lang),
+            got_symbol=entry["got_symbol"],
+            status=table["history_status"].get(entry["status"], entry["status"]),
+        )
+        for number, entry in enumerate(entries, start=1)
+    ]
+    return " ".join([say("history_intro", lang, count=len(entries)), *rows])
+
+
+def say_usd_note(amount: str, lang: str) -> str:
+    return say("usd_note", lang, usd=format_amount(amount, lang))
+
+
+def say_price_usd(usd: Decimal, token: dict, lang: str) -> str:
+    amount = usd / Decimal(str(token["price"]))
+    return say(
+        "price_usd",
+        lang,
+        usd=format_amount(str(usd), lang),
+        amount=format_amount(f"{amount:f}", lang),
+        symbol=token["symbol"],
+    )
 
 
 def say_budget(data: dict, lang: str) -> str:
