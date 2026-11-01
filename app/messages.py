@@ -32,6 +32,8 @@ MESSAGES = {
         "no_agent": "Ajan cüzdanı kurulmadı. Kurulum bitince yeniden dene.",
         "withdraw_terms": "{mode} Çekilecek: {amount} {symbol}. Nereye: sahip adresin, {chain} ağı. {received} {fee} {budget} Teklif {ttl} dakika geçerli.",
         "withdraw_capped": "Hepsi tek seferde çekilemez, tek işlem sınırı bu kadar.",
+        "withdraw_native": "wNEAR sahip hesabına native NEAR olarak ulaşır.",
+        "withdraw_stays": "Dikkat, bu token sahip hesabında kalır ve oradan Binance'e gönderilemez. Binance'e dönecekse önce NEAR'a çevir.",
         "withdraw_received": "Ulaşacak: yaklaşık {amount} {symbol}.",
         "withdraw_received_unknown": "Ulaşacak tutar önizlemede yok.",
         "withdraw_budget": "Bu çekim günlük bütçenden yaklaşık {usd} dolar düşer, kalan {left} dolar olur.",
@@ -193,6 +195,8 @@ MESSAGES = {
         "no_agent": "The agent wallet is not set up. Try again after setup.",
         "withdraw_terms": "{mode} Withdrawing: {amount} {symbol}. To: your owner address, on {chain}. {received} {fee} {budget} Quote valid for {ttl} minutes.",
         "withdraw_capped": "All of it cannot go at once, so this is the limit for one transaction.",
+        "withdraw_native": "wNEAR arrives at the owner account as native NEAR.",
+        "withdraw_stays": "Warning: this token stays on the owner account and cannot go on to Binance from there. To return it, swap to NEAR first.",
         "withdraw_received": "Arriving: about {amount} {symbol}.",
         "withdraw_received_unknown": "The preview does not show the amount arriving.",
         "withdraw_budget": "This takes about {usd} dollars from your daily budget, leaving {left} dollars.",
@@ -628,6 +632,8 @@ def say_withdraw(order, lang: str, ttl: int) -> str:
         budget=budget,
         ttl=ttl,
     )
+    note = say("withdraw_native" if order.symbol == "wNEAR" else "withdraw_stays", lang)
+    terms = f"{terms} {note}"
     return f"{say('withdraw_capped', lang)} {terms}" if order.capped else terms
 
 

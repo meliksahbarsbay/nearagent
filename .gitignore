@@ -15,6 +15,7 @@ data/
 # Node, for the owner signing tools
 node_modules/
 scripts/owner/plan.json
+scripts/owner/send_pending.json
 
 # Local agent files. Restore skills from skills-lock.json.
 .claude/

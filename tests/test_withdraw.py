@@ -11,7 +11,7 @@ import scripts.owner_setup as setup
 from app.commands import detect_command
 from app.history import history
 from tests.test_live import FakeAgent, answer, status, track
-from tests.test_quote import make_client
+from tests.test_quote import make_client, use_intent
 
 OWNER = "a" * 64
 USDC = "usdc-base"
@@ -167,7 +167,10 @@ def test_offer_reads_what_where_and_the_budget_before_confirming(wallet):
         "Canlı mod, gerçek para. Çekilecek: 4 USDC. Nereye: sahip adresin, NEAR ağı. "
         "Ulaşacak: yaklaşık 3,99 USDC. Ücret: yaklaşık 0,01 dolar. "
         "Bu çekim günlük bütçenden yaklaşık 4 dolar düşer, kalan 6 dolar olur. "
-        "Teklif 2 dakika geçerli. Onaylıyor musun? Evet yaz ya da Onayla düğmesine bas."
+        "Teklif 2 dakika geçerli. "
+        "Dikkat, bu token sahip hesabında kalır ve oradan Binance'e gönderilemez. "
+        "Binance'e dönecekse önce NEAR'a çevir. "
+        "Onaylıyor musun? Evet yaz ya da Onayla düğmesine bas."
     )
     assert data["confirm_button"] is True
     assert data["expires_in"] == live.QUOTE_SECONDS
@@ -395,13 +398,18 @@ def test_token_not_held(wallet):
     assert "USDC" in data["spoken"]
 
 
-def test_near_finds_wnear(wallet):
+def test_near_finds_wnear_and_says_it_arrives_native(wallet):
     wallet.balances[0].update(asset_id="wnear", symbol="wNEAR", decimals=24,
                               balance_raw="1000000000000000000000000",
                               available_raw="1000000000000000000000000")
+    wallet.received = "1000000000000000000000000"
+    wallet.policy["policy"]["limits"]["per_transaction"]["wnear"] = "2000000000000000000000000"
     client, _ = make_client()
-    ask(client, "hepsini NEAR çek")
-    assert json.loads(wallet.previews()[0].content)["asset"] == "wnear"
+    data = ask(client, "hepsini NEAR çek")
+    body = json.loads(wallet.previews()[0].content)
+    assert (body["asset"], body["chain"], body["recipient"]) == ("wnear", "near", OWNER)
+    assert "wNEAR sahip hesabına native NEAR olarak ulaşır." in data["spoken"]
+    assert "Binance'e gönderilemez" not in data["spoken"]
 
 
 def test_empty_wallet(wallet):
@@ -619,3 +627,48 @@ def test_terminal_explains_a_refusal(wallet):
     wallet.remaining = "1.000000"
     with pytest.raises(setup.SetupError, match="withdraw_no_budget"):
         run_command(wallet, "hepsini USDC")
+
+
+def test_the_whole_return_path_inside_the_agent(wallet, monkeypatch):
+    """USDC on Base to NEAR, then NEAR to the owner, on the steps of docs/funding.md."""
+    tokens = [
+        {"asset_id": USDC, "symbol": "USDC", "blockchain": "base", "decimals": 6, "price": 1.0},
+        {"asset_id": "wnear", "symbol": "wNEAR", "blockchain": "near", "decimals": 24, "price": 4.0},
+    ]
+
+    original = wallet.handle
+
+    def with_tokens(request):
+        if request.url.path == "/v1/tokens":
+            wallet.requests.append(request)
+            return httpx.Response(200, json={"data": tokens})
+        return original(request)
+
+    monkeypatch.setattr(live, "transport", httpx.MockTransport(with_tokens))
+    wallet.usd = "4.90"
+    wallet.amount_out = "1225000000000000000000000"
+    wallet.min_out = "1212750000000000000000000"
+    client, _ = make_client()
+    use_intent(
+        monkeypatch, action="swap", amount="4.9", from_token="USDC", from_chain="base",
+        to_token="NEAR",
+    )
+    offer = client.post("/api/ask", json={"text": "x", "live": True}).json()
+    assert answer(client, offer["pending"], "evet")["action"] == "live_sent"
+    swap = wallet.live_swaps()[0][1]
+    assert (swap["origin_asset"], swap["destination_asset"]) == (USDC, "wnear")
+
+    wallet.balances = [
+        {"asset_id": "wnear", "symbol": "wNEAR", "decimals": 24, "blockchain": "near", "price": 4.0,
+         "balance_raw": "1225000000000000000000000", "available_raw": "1225000000000000000000000"}
+    ]
+    wallet.policy["policy"]["limits"]["per_transaction"]["wnear"] = "1250000000000000000000000"
+    wallet.preview_usd = "4.90"
+    wallet.remaining = "5.100000"
+    wallet.received = "1225000000000000000000000"
+    key = ask(client, "hepsini NEAR çek")["pending"]
+    assert answer(client, key, "evet")["action"] == "live_sent"
+    body = json.loads(wallet.sends()[0].content)
+    assert body == {
+        "asset": "wnear", "amount": "1225000000000000000000000", "chain": "near", "recipient": OWNER,
+    }
