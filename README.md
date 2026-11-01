@@ -88,7 +88,7 @@ Dry mode needs no wallet, no funds, and no keys. It moves no money. It needs Pyt
    python -m pip install -r requirements.txt
    ```
 
-2. Do: run `python -m pytest -q`. See: all tests pass, with no network calls.
+2. Do: run `python -m pytest -q`. See: all tests pass with no network calls. One signer test is skipped until the Node tools are installed.
 3. Do: run `python -m uvicorn app.main:app --host 127.0.0.1 --port 8000`, and open http://127.0.0.1:8000.
 4. Do: press Tab until you reach the `Gelişmiş` section, press Enter to open it, Tab to `Deneme teklifi al`, and press Enter. See: a real dry quote for 1 wNEAR to USDC read in fixed order, ending with `Onaylıyor musun?` This uses the public 1Click API.
 5. Do: press Enter on the empty text box. See: `Deneme modu: işlem yapılmadı.`
