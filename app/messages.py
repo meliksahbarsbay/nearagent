@@ -28,8 +28,20 @@ TURKISH_ACCUSATIVE = {
 
 MESSAGES = {
     "tr": {
+        "mode_dry": "Deneme modu.",
+        "mode_live": "Canlı mod.",
+        "live_on": "Canlı mod açık. Onay için evet yazman ya da Onayla düğmesine basman gerekir.",
+        "live_off": "Canlı mod kapalı. Deneme modundasın, para hareket etmez.",
+        "live_not_configured": "Canlı mod için ajan cüzdanı kurulmadı. Deneme modunda devam edebilirsin.",
+        "live_not_connected": "Canlı işlem henüz bağlı değil, para hareket etmedi. Deneme modunda devam edebilirsin.",
+        "live_needs_word": "Canlı modda Enter onay sayılmaz. Evet yaz ya da Onayla düğmesine bas.",
+        "confirm_question_live": "Onaylıyor musun? Evet yaz ya da Onayla düğmesine bas.",
+        "large_question_live": (
+            "Yaklaşık {words} dolar mı dedin? Evet yaz ya da Onayla düğmesine bas. "
+            "Değilse hayır yaz ya da Esc'e bas."
+        ),
         "quote": (
-            "Deneme modu. Veriyorsun: {amount_in} {symbol_in}. "
+            "{mode} Veriyorsun: {amount_in} {symbol_in}. "
             "Alıyorsun: yaklaşık {amount_out} {symbol_out}. "
             "En az garanti: {min_out} {symbol_out}. {fee} "
             "Süre: yaklaşık {duration}. Teklif {ttl} dakika geçerli."
@@ -72,8 +84,20 @@ MESSAGES = {
         "upstream": "Teklif servisine ulaşılamadı. Biraz sonra yeniden dene.",
     },
     "en": {
+        "mode_dry": "Dry run.",
+        "mode_live": "Live mode.",
+        "live_on": "Live mode is on. To confirm, type yes or press the Confirm button.",
+        "live_off": "Live mode is off. You are in dry mode, so no funds move.",
+        "live_not_configured": "The agent wallet for live mode is not set up. You can continue in dry mode.",
+        "live_not_connected": "Live execution is not connected yet, so no funds moved. You can continue in dry mode.",
+        "live_needs_word": "Enter does not confirm in live mode. Type yes or press the Confirm button.",
+        "confirm_question_live": "Do you confirm? Type yes or press the Confirm button.",
+        "large_question_live": (
+            "Did you mean about {words} dollars? Type yes or press the Confirm button. "
+            "If not, type no or press Escape."
+        ),
         "quote": (
-            "Dry run. You give: {amount_in} {symbol_in}. "
+            "{mode} You give: {amount_in} {symbol_in}. "
             "You get: about {amount_out} {symbol_out}. "
             "Guaranteed minimum: {min_out} {symbol_out}. {fee} "
             "Time: about {duration}. Quote valid for {ttl} minutes."
@@ -225,10 +249,13 @@ def say_fee(fee: Decimal | None, lang: str) -> str:
     return say("fee", lang, usd=format_amount(str(fee.quantize(SMALLEST_FEE, ROUND_HALF_UP)), lang))
 
 
-def say_quote(quote: dict, symbol_in: str, symbol_out: str, min_out: str, lang: str) -> str:
+def say_quote(
+    quote: dict, symbol_in: str, symbol_out: str, min_out: str, lang: str, live: bool = False
+) -> str:
     return say(
         "quote",
         lang,
+        mode=say("mode_live" if live else "mode_dry", lang),
         amount_in=format_amount(quote["amountInFormatted"], lang),
         symbol_in=symbol_in,
         amount_out=format_amount(quote["amountOutFormatted"], lang),
@@ -240,8 +267,9 @@ def say_quote(quote: dict, symbol_in: str, symbol_out: str, min_out: str, lang: 
     )
 
 
-def say_large(usd: Decimal, lang: str) -> str:
-    return say("large_question", lang, words=spell_number(int(usd.to_integral_value(ROUND_HALF_UP)), lang))
+def say_large(usd: Decimal, lang: str, live: bool = False) -> str:
+    words = spell_number(int(usd.to_integral_value(ROUND_HALF_UP)), lang)
+    return say("large_question_live" if live else "large_question", lang, words=words)
 
 
 def say_price(amount: Decimal, token: dict, lang: str) -> str:

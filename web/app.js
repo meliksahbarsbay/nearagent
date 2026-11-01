@@ -15,9 +15,20 @@ const TEXT = {
     busy: "Yanıt bekleniyor.",
     failed: "Sunucuya ulaşılamadı. Uygulamanın çalıştığını kontrol et, sonra yeniden dene.",
     shortcuts:
-      "Kısayollar: Enter gönderir ya da onaylar. Esc iptal eder. Alt R son cevabı tekrar okur. Alt H yardımı okur.",
+      "Kısayollar: Enter gönderir ya da onaylar. Esc iptal eder. Alt M mikrofonu açar. Alt R son cevabı tekrar okur. Alt H yardımı okur.",
     help:
-      "Bir cümle yaz ve Enter'a bas, örneğin 2 NEAR'ı USDC'ye çevir. Teklif okununca Enter ya da evet onaylar, Esc ya da hayır iptal eder. Alt R son cevabı tekrar okur.",
+      "Bir cümle yaz ve Enter'a bas, örneğin 2 NEAR'ı USDC'ye çevir. Teklif okununca Enter ya da evet onaylar, Esc ya da hayır iptal eder. Alt M mikrofonu açar. Alt R son cevabı tekrar okur.",
+    mic: "Mikrofon",
+    confirm: "Onayla",
+    live: "Canlı mod",
+    listening: "Dinliyorum",
+    heard: "Anladım:",
+    noVoice: "Bu tarayıcı sesli girişi desteklemiyor, Chrome ya da Edge kullan",
+    noSpeech: "Bir şey duyamadım. Mikrofona yeniden bas ve konuş.",
+    voiceDenied: "Mikrofon izni yok. Tarayıcıdan izin ver, sonra yeniden dene.",
+    voiceNoDevice: "Mikrofon bulunamadı. Mikrofonun bağlı olduğunu kontrol et.",
+    voiceFailed: "Sesli giriş çalışmadı. İnternet bağlantını kontrol et ya da cümleyi yaz.",
+    voiceStopped: "Dinlemeyi durdurdum.",
     nothing: "Henüz bir cevap yok.",
     nothingToCancel: "İptal edilecek bir işlem yok.",
     stopped: "Bekleyen isteği iptal ettim.",
@@ -45,9 +56,20 @@ const TEXT = {
     busy: "Waiting for a reply.",
     failed: "Could not reach the server. Check that the app is running, then try again.",
     shortcuts:
-      "Shortcuts: Enter sends or confirms. Escape cancels. Alt R repeats the last reply. Alt H reads the help.",
+      "Shortcuts: Enter sends or confirms. Escape cancels. Alt M turns on the microphone. Alt R repeats the last reply. Alt H reads the help.",
     help:
-      "Type a sentence and press Enter, for example swap 2 NEAR to USDC. After a quote, Enter or yes confirms, and Escape or no cancels. Alt R repeats the last reply.",
+      "Type a sentence and press Enter, for example swap 2 NEAR to USDC. After a quote, Enter or yes confirms, and Escape or no cancels. Alt M turns on the microphone. Alt R repeats the last reply.",
+    mic: "Microphone",
+    confirm: "Confirm",
+    live: "Live mode",
+    listening: "Listening",
+    heard: "I heard:",
+    noVoice: "This browser does not support voice input. Use Chrome or Edge.",
+    noSpeech: "I heard nothing. Press the microphone again and speak.",
+    voiceDenied: "There is no microphone permission. Allow it in the browser, then try again.",
+    voiceNoDevice: "No microphone was found. Check that one is connected.",
+    voiceFailed: "Voice input did not work. Check your connection, or type the sentence.",
+    voiceStopped: "I stopped listening.",
     nothing: "There is no reply yet.",
     nothingToCancel: "There is nothing to cancel.",
     stopped: "I cancelled the waiting request.",
@@ -64,6 +86,14 @@ const TEXT = {
 };
 
 const ANNOUNCE_DELAY_MS = 100;
+const SPEECH_LOCALES = { tr: "tr-TR", en: "en-US" };
+const VOICE_ERRORS = {
+  "not-allowed": "voiceDenied",
+  "service-not-allowed": "voiceDenied",
+  "audio-capture": "voiceNoDevice",
+  "no-speech": "noSpeech",
+};
+const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
 const byId = (id) => document.getElementById(id);
 const langSelect = byId("lang");
@@ -75,6 +105,8 @@ let pending = null;
 let lastReply = "";
 let lastIds = [];
 let announceTimer = 0;
+let liveMode = false;
+let listening = null;
 
 function announce(message) {
   // Emptying first makes a repeated sentence count as a change for screen readers.
@@ -135,6 +167,9 @@ function applyLanguage(next) {
   byId("amount-label").textContent = text.amount;
   byId("submit").textContent = text.submit;
   byId("shortcuts").textContent = text.shortcuts;
+  byId("mic").textContent = text.mic;
+  byId("confirm").textContent = text.confirm;
+  byId("live-toggle").textContent = text.live;
   renderIds();
 }
 
@@ -165,6 +200,7 @@ async function send(path, body, button) {
     });
     const data = await response.json();
     pending = data.pending || null;
+    byId("confirm").hidden = !data.confirm_button;
     rememberIds(data);
     if (data.language in TEXT) applyLanguage(data.language);
     if (response.ok || pending) sentence.value = "";
@@ -181,13 +217,83 @@ async function send(path, body, button) {
 }
 
 function ask(text) {
-  const body = { text, lang: language };
+  const body = { text, lang: language, live: liveMode };
   if (pending) body.pending = pending;
   send("api/ask", body, byId("ask-submit"));
 }
 
+async function setLiveMode(next) {
+  try {
+    const response = await fetch("api/mode", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ live: next, lang: language }),
+    });
+    const data = await response.json();
+    if (response.ok) liveMode = data.live;
+    byId("live-toggle").setAttribute("aria-pressed", String(liveMode));
+    lastReply = data.spoken || TEXT[language].failed;
+    announce(lastReply);
+  } catch {
+    announce(TEXT[language].failed);
+  }
+}
+
+function stopListening() {
+  byId("mic").setAttribute("aria-pressed", "false");
+  listening = null;
+}
+
+function toggleListening() {
+  const text = TEXT[language];
+  if (listening) {
+    listening.stop();
+    return;
+  }
+  if (!Recognition) {
+    announce(text.noVoice);
+    return;
+  }
+  const session = new Recognition();
+  let finished = false;
+  session.lang = SPEECH_LOCALES[language];
+  session.continuous = false;
+  session.interimResults = false;
+  session.maxAlternatives = 1;
+  session.onstart = () => {
+    byId("mic").setAttribute("aria-pressed", "true");
+    announce(text.listening);
+  };
+  session.onresult = (event) => {
+    finished = true;
+    // Written to the box and never sent: the user checks it, then presses Enter.
+    sentence.value = event.results[0][0].transcript.trim();
+    sentence.focus();
+    announce(`${text.heard} ${sentence.value}`);
+  };
+  session.onerror = (event) => {
+    finished = true;
+    if (event.error !== "aborted") announce(text[VOICE_ERRORS[event.error] || "voiceFailed"]);
+  };
+  session.onend = () => {
+    stopListening();
+    if (!finished) announce(text.noSpeech);
+  };
+  listening = session;
+  try {
+    session.start();
+  } catch {
+    finished = true;
+    stopListening();
+    announce(text.voiceFailed);
+  }
+}
+
 function cancel() {
-  if (controller) {
+  if (listening) {
+    listening.abort();
+    announce(TEXT[language].voiceStopped);
+  } else if (controller) {
     controller.abort();
     announce(TEXT[language].stopped);
   } else if (pending) {
@@ -212,10 +318,15 @@ byId("quote-form").addEventListener("submit", (event) => {
       to_token: byId("to-token").value,
       amount: byId("amount").value,
       lang: langSelect.value,
+      live: liveMode,
     },
     byId("submit")
   );
 });
+
+byId("mic").addEventListener("click", toggleListening);
+byId("confirm").addEventListener("click", () => ask("evet"));
+byId("live-toggle").addEventListener("click", () => setLiveMode(!liveMode));
 
 // A held Enter key must not send a request and then confirm the reply.
 sentence.addEventListener("keydown", (event) => {
@@ -237,6 +348,9 @@ document.addEventListener("keydown", (event) => {
   } else if (key === "h") {
     event.preventDefault();
     announce(TEXT[language].help);
+  } else if (key === "m") {
+    event.preventDefault();
+    toggleListening();
   }
 });
 

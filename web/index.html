@@ -29,7 +29,9 @@
       <label for="sentence" id="sentence-label"></label>
       <input id="sentence" autocomplete="off" spellcheck="false" maxlength="300" aria-describedby="shortcuts">
       <p id="shortcuts" class="visually-hidden"></p>
+      <button type="button" id="mic" aria-pressed="false"></button>
       <button type="submit" id="ask-submit"></button>
+      <button type="button" id="confirm" hidden></button>
     </form>
 
     <h2 id="result-heading"></h2>
@@ -42,6 +44,7 @@
 
     <details>
       <summary id="advanced-summary"></summary>
+      <button type="button" id="live-toggle" aria-pressed="false"></button>
       <form id="quote-form" novalidate>
         <label for="lang" id="lang-label"></label>
         <select id="lang">

@@ -80,13 +80,14 @@ class Pending:
     lang: str
     swap: dict = field(default_factory=dict)
     expires_at: float = 0.0
+    live: bool = False
 
 
 class PendingStore:
     def __init__(self):
         self._items: dict[str, Pending] = {}
 
-    def add(self, kind: str, lang: str, swap: dict | None = None) -> str:
+    def add(self, kind: str, lang: str, swap: dict | None = None, live: bool = False) -> str:
         now = time.monotonic()
         self._items = {k: v for k, v in self._items.items() if v.expires_at > now}
         # Dicts keep insertion order, so the first key is the oldest question.
@@ -94,7 +95,7 @@ class PendingStore:
             del self._items[next(iter(self._items))]
         key = secrets.token_urlsafe(16)
         expires_at = now + QUOTE_TTL_MINUTES * 60
-        self._items[key] = Pending(kind, lang, swap or {}, expires_at)
+        self._items[key] = Pending(kind, lang, swap or {}, expires_at, live)
         return key
 
     def get(self, key: str) -> Pending | None:

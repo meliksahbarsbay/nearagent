@@ -388,3 +388,5 @@ def test_page_is_served():
     assert 'aria-live="polite"' in response.text
     assert "<details>" in response.text
     assert 'aria-describedby="shortcuts"' in response.text
+    assert 'id="mic"' in response.text
+    assert 'id="live-toggle"' in response.text

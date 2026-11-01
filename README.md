@@ -19,14 +19,16 @@ Swap interfaces are visual: charts, popups, and icon-only buttons. A blind user 
 - If a sentence has no amount, it asks how much and applies your answer to the same swap.
 - Numbers are written for screen readers: a comma in Turkish, a dot in English, no extra zeros. Long identifiers are never read aloud, and each one has a copy button.
 - Every error says what happened and what to do next, with no codes.
-- Shortcuts: Enter sends or confirms, Esc cancels, Alt+R repeats the last reply, and Alt+H reads the help. The text box also announces them through hidden help text.
+- Shortcuts: Enter sends or confirms, Esc cancels, Alt+M turns on the microphone, Alt+R repeats the last reply, and Alt+H reads the help. The text box also announces them through hidden help text.
+- Voice input through the browser's Web Speech API. It uses Turkish or English to match the page, announces `Dinliyorum` and `Anladım: ...`, and writes what it heard into the text box. It never sends by itself: you check the text and press Enter.
 - An Advanced section keeps a field-based form, `POST /api/quote`, which works with no keys.
-- Dry mode only. The code cannot execute a swap today, so a confirmation only replies `Deneme modu: işlem yapılmadı.`
+- Dry mode by default. The code cannot execute a swap today, so a confirmation only replies `Deneme modu: işlem yapılmadı.`
+- A live mode switch in the Advanced section. It stays off with the reply `Canlı mod için ajan cüzdanı kurulmadı` unless the Agent API key, `AGENT_ID`, and `GRANT_TOKEN` are all set.
+- In live mode, Enter alone never confirms. You must type `evet` or `yes`, or press a separate Confirm button. Execution is still not connected, so even a live confirmation replies that no funds moved.
 
 ## Planned, not built yet
 
-- Voice input.
-- Live execution through a policy-bound Agent API wallet. It is mainnet only and uses real funds, so it will stay off by default, use a separate account with small amounts, and require explicit user confirmation for every action.
+- Live execution through a policy-bound Agent API wallet. It is mainnet only and uses real funds, so it will stay off by default, use a separate account with small amounts, and require explicit user confirmation for every action. `app/agent_api.py` is the client for it, written from the Agent API docs and tested against a mock. It has never made a real call, and `app/main.py` does not use its money methods.
 
 ## How NEAR is used
 
@@ -72,8 +74,10 @@ Prices below are examples, so your numbers will differ. Steps 3 to 10 need a key
 8. Do: type `swap 2 NEAR to USDC` and press Enter, then Tab to the first `Copy` button and press Enter. See: `Copied.` Press Esc to cancel the quote.
 9. Do: type `merhaba` and press Enter. See: a short Turkish help message. Then press Alt+H. See: how to use the page and its shortcuts.
 10. Do: type `5 ABCD'yi SOL'a çevir` and press Enter. See: `ABCD tokenini bulamadım. Token adını kontrol edip yeniden yaz.`
-11. Do: Tab to the Advanced section and press Enter to open it, Tab to the submit button, and press Enter. See: a dry quote from the field-based form, with focus back in the text box for your answer. This step needs no key.
-12. Do: call the API directly:
+11. Do: in Chrome or Edge, press Alt+M and allow the microphone, then say `bir SOL kaç dolar`. See: `Dinliyorum`, then `Anladım: ...`, and the text in the box. Nothing is sent until you press Enter.
+12. Do: Tab to the Advanced section and press Enter to open it, then press Enter on the `Canlı mod` button. See: `Canlı mod için ajan cüzdanı kurulmadı. Deneme modunda devam edebilirsin.` This step needs no key.
+13. Do: Tab to the submit button in the Advanced section and press Enter. See: a dry quote from the field-based form, with focus back in the text box for your answer. This step needs no key.
+14. Do: call the API directly:
 
 ```sh
 curl -X POST http://127.0.0.1:8000/api/quote -H "Content-Type: application/json" -d "{\"from_token\":\"NEAR\",\"to_token\":\"USDC\",\"amount\":\"1\",\"lang\":\"en\"}"
@@ -101,6 +105,18 @@ NEAR AI Cloud has not been measured on this set yet.
 - An answer to `how much` must be a number, or a simple word such as `yarım` or `two`. `50 dolar` and `1.000` are asked again, because they could mean a different amount.
 - Open questions live in server memory, so a restart ends them and the page says the quote expired.
 - Tests cover the server. The page's keyboard behaviour was checked by hand in Chrome.
+- Voice recognition was checked with a stand-in recognizer, not a real microphone. Chrome and Edge may send audio to their own speech service, unlike sentence parsing on NEAR AI Cloud.
+- Voice input follows the page language, so an English sentence on a Turkish page may be misheard. Change the language in the Advanced section first.
+- Owner signing happens in a wallet in the browser. This app has no wallet step yet, so setting up an agent needs separate tooling.
+
+## NVDA ile doğrulanacaklar
+
+Not yet checked with NVDA:
+
+- [ ] Esc: NVDA may use the first press to leave focus mode, so cancelling may take two presses.
+- [ ] Focus after a copy button: Enter copies again until focus returns to the text box. Check that this is clear in use.
+- [ ] Spoken replies: check that each `aria-live` reply is read aloud in full, including a repeat with Alt+R.
+- [ ] Microphone: check that speakers do not feed NVDA's voice into recognition. Headphones may be needed.
 
 ## Configuration
 

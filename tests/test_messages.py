@@ -30,6 +30,9 @@ ERROR_KEYS = [
     "expired",
     "amount_again",
     "not_understood",
+    "live_not_configured",
+    "live_not_connected",
+    "live_needs_word",
 ]
 
 
