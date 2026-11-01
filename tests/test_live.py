@@ -160,4 +160,4 @@ def test_dry_quote_shows_no_confirm_button(no_live):
 
 def test_main_has_no_way_to_reach_the_agent_client():
     assert not hasattr(main, "AgentApi")
-    assert "agent_api import live_ready " in open(main.__file__, encoding="utf-8").read()
+    assert not hasattr(main, "create_grant_credential")

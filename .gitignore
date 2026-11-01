@@ -9,6 +9,10 @@ __pycache__/
 *.pyc
 .pytest_cache/
 
+# Node, for the owner signing tools
+node_modules/
+scripts/owner/plan.json
+
 # Local agent files. Restore skills from skills-lock.json.
 .claude/
 .agents/

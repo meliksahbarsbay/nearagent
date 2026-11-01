@@ -28,6 +28,22 @@ TURKISH_ACCUSATIVE = {
 
 MESSAGES = {
     "tr": {
+        "no_agent": "Ajan cüzdanı kurulmadı. Kurulum bitince yeniden dene.",
+        "agent_read_failed": "Ajan bilgisi alınamadı. Biraz sonra yeniden dene.",
+        "policy_not_ready": "Politika henüz yürürlükte değil. Biraz sonra yeniden sor.",
+        "policy": "Politika: izinli işlemler {actions}. {assets} varlık izinli. {budget} {frozen}",
+        "action_names": {"swap": "takas", "withdraw": "çekim", "transfer": "transfer"},
+        "action_join": " ve ",
+        "policy_budget": "Günlük bütçe {limit} dolar.",
+        "policy_no_budget": "Günlük bütçe sınırı yok.",
+        "policy_frozen": "Ajan şu an dondurulmuş.",
+        "policy_active": "Ajan çalışır durumda.",
+        "budget_left": "Günlük bütçenden {left} dolar kaldı. Sınır {limit} dolar.",
+        "budget_none": "Günlük bütçe sınırı yok. Sınır koymak için politikayı güncellemek gerekir.",
+        "freeze_manual": (
+            "Dondurma bu ekrana henüz bağlı değil, ajan dondurulmadı. "
+            "Terminalde sahip betiğindeki freeze komutunu çalıştır."
+        ),
         "mode_dry": "Deneme modu.",
         "mode_live": "Canlı mod.",
         "live_on": "Canlı mod açık. Onay için evet yazman ya da Onayla düğmesine basman gerekir.",
@@ -84,6 +100,22 @@ MESSAGES = {
         "upstream": "Teklif servisine ulaşılamadı. Biraz sonra yeniden dene.",
     },
     "en": {
+        "no_agent": "The agent wallet is not set up. Try again after setup.",
+        "agent_read_failed": "I could not read the agent. Try again shortly.",
+        "policy_not_ready": "The policy is not in force yet. Ask again shortly.",
+        "policy": "Policy: allowed actions are {actions}. {assets} assets are allowed. {budget} {frozen}",
+        "action_names": {"swap": "swap", "withdraw": "withdraw", "transfer": "transfer"},
+        "action_join": " and ",
+        "policy_budget": "The daily budget is {limit} dollars.",
+        "policy_no_budget": "There is no daily budget cap.",
+        "policy_frozen": "The agent is frozen.",
+        "policy_active": "The agent is active.",
+        "budget_left": "You have {left} dollars left of your daily budget. The cap is {limit} dollars.",
+        "budget_none": "There is no daily budget cap. Setting one needs a policy update.",
+        "freeze_manual": (
+            "Freezing is not connected to this page yet, so the agent was not frozen. "
+            "Run the freeze command of the owner script in a terminal."
+        ),
         "mode_dry": "Dry run.",
         "mode_live": "Live mode.",
         "live_on": "Live mode is on. To confirm, type yes or press the Confirm button.",
@@ -264,6 +296,50 @@ def say_quote(
         fee=say_fee(fee_usd(quote), lang),
         duration=say_duration(quote["timeEstimate"], lang),
         ttl=QUOTE_TTL_MINUTES,
+    )
+
+
+def format_usd(value: str, lang: str) -> str:
+    """Cents, rounded down, so a remaining budget is never read out higher than it is."""
+    return format_amount(str(Decimal(value).quantize(SMALLEST_FEE, ROUND_DOWN)), lang)
+
+
+def say_policy(data: dict, lang: str) -> str:
+    policy = data.get("policy")
+    if not policy or data.get("status") != "APPLIED" or not data.get("provider_policy_synced"):
+        return say("policy_not_ready", lang)
+    names = MESSAGES[lang]["action_names"]
+    actions = MESSAGES[lang]["action_join"].join(names.get(a, a) for a in policy["actions"])
+    assets = policy["assets"]
+    daily = (policy.get("budget") or {}).get("daily_usd")
+    budget = (
+        say("policy_budget", lang, limit=format_usd(daily, lang))
+        if daily is not None
+        else say("policy_no_budget", lang)
+    )
+    return say(
+        "policy",
+        lang,
+        actions=actions,
+        assets=len(assets) if isinstance(assets, list) else say_all_assets(lang),
+        budget=budget,
+        frozen=say("policy_frozen" if policy["frozen"] else "policy_active", lang),
+    )
+
+
+def say_all_assets(lang: str) -> str:
+    return "Tüm" if lang == "tr" else "All"
+
+
+def say_budget(data: dict, lang: str) -> str:
+    daily = ((data.get("usage") or {}).get("budget") or {}).get("daily") or {}
+    if daily.get("limit_usd") is None:
+        return say("budget_none", lang)
+    return say(
+        "budget_left",
+        lang,
+        left=format_usd(daily["remaining_usd"], lang),
+        limit=format_usd(daily["limit_usd"], lang),
     )
 
 

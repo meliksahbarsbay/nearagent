@@ -1,7 +1,8 @@
 """Client for the NEAR Intents Agent API, written from its docs and OpenAPI file.
 
-Mainnet only, with real funds. The app does not call this client yet: main.py reads
-live_ready() and nothing else, so no code path here can move funds today.
+Mainnet only, with real funds. The app uses only live_ready(), agent_ready(), and
+read_agent_policy(), which holds no grant token, so no app path here can move funds today.
+scripts/owner_setup.py uses the rest, and only when the owner runs it.
 
 Docs: https://docs.agentsonintents.com/integration/agent-api/
 """
@@ -93,6 +94,12 @@ def live_ready() -> bool:
     return bool(settings.api_key and settings.agent_id and settings.grant_token)
 
 
+def agent_ready() -> bool:
+    """Reading an agent needs its id and the partner key, but no grant."""
+    settings = live_settings()
+    return bool(settings.api_key and settings.agent_id)
+
+
 def create_grant_credential() -> tuple[str, str]:
     """Return a new grant token and its commitment. Only the commitment leaves the backend."""
     encoded = base64.urlsafe_b64encode(secrets.token_bytes(32)).rstrip(b"=").decode()
@@ -157,6 +164,13 @@ def parse_error(response: httpx.Response) -> AgentApiError:
             "unknown_error",
             request_id=response.headers.get("X-Request-Id"),
         )
+
+
+async def read_agent_policy(transport: httpx.AsyncBaseTransport | None = None) -> dict:
+    """Read the rules and budget. The client gets no grant token, so it cannot spend."""
+    settings = live_settings()
+    api = AgentApi(settings.api_key, settings.base_url, transport=transport)
+    return await api.policy(settings.agent_id)
 
 
 class AgentApi:

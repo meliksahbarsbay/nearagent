@@ -11,8 +11,15 @@ from pydantic import BaseModel
 
 load_dotenv()
 
-# Only the readiness check is imported: nothing in this file can reach a money action.
-from app.agent_api import live_ready  # noqa: E402
+# Only checks and a read are imported: nothing in this file can reach a money action.
+from app.agent_api import (  # noqa: E402
+    AgentApiError,
+    AgentApiRequestError,
+    agent_ready,
+    live_ready,
+    read_agent_policy,
+)
+from app.commands import detect_command  # noqa: E402
 from app.confirm import Pending, PendingStore, answer_word, read_amount  # noqa: E402
 from app.intent import Intent, ParserUnavailable, parse_intent  # noqa: E402
 from app.messages import (  # noqa: E402
@@ -20,8 +27,10 @@ from app.messages import (  # noqa: E402
     from_atomic,
     say,
     say_assumed,
+    say_budget,
     say_error,
     say_large,
+    say_policy,
     say_price,
     say_quote,
 )
@@ -240,6 +249,19 @@ async def answer_pending(
     return {**reply("confirmed", "confirmed_dry", item.lang), "mode": "dry"}
 
 
+async def run_command(command: str, lang: str) -> dict:
+    if not agent_ready():
+        return reply(command, "no_agent", lang)
+    if command == "freeze":
+        return reply(command, "freeze_manual", lang)
+    try:
+        data = await read_agent_policy()
+    except (AgentApiError, AgentApiRequestError):
+        raise QuoteError("agent_read_failed", 502) from None
+    spoken = say_policy(data, lang) if command == "policy" else say_budget(data, lang)
+    return {"action": command, "language": lang, "spoken": spoken}
+
+
 @app.post("/api/ask")
 async def ask(data: AskInput, client: OneClick = Depends(get_oneclick)):
     text = data.text.strip()
@@ -249,11 +271,15 @@ async def ask(data: AskInput, client: OneClick = Depends(get_oneclick)):
         return await answer_pending(client, data.pending, text, lang)
     lang = data.lang if data.lang and not text else detect_language(text)
     try:
-        require_live(data.live)
         if not text:
             raise QuoteError("empty_text")
         if len(text) > MAX_SENTENCE:
             raise QuoteError("too_long")
+        command = detect_command(text)
+        if command:
+            lang = command[1]
+            return await run_command(*command)
+        require_live(data.live)
         try:
             intent = await parse_intent(text)
         except ParserUnavailable:

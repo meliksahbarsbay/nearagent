@@ -23,12 +23,32 @@ Swap interfaces are visual: charts, popups, and icon-only buttons. A blind user 
 - Voice input through the browser's Web Speech API. It uses Turkish or English to match the page, announces `Dinliyorum` and `Anladım: ...`, and writes what it heard into the text box. It never sends by itself: you check the text and press Enter.
 - An Advanced section keeps a field-based form, `POST /api/quote`, which works with no keys.
 - Dry mode by default. The code cannot execute a swap today, so a confirmation only replies `Deneme modu: işlem yapılmadı.`
+- Agent commands, typed or spoken: `politikamı oku`, `bütçem ne kadar kaldı`, and `ajanı dondur`, or `read my policy`, `how much budget is left`, and `freeze the agent`. With no agent they reply `Ajan cüzdanı kurulmadı`. Freezing is not connected to the page yet, so `ajanı dondur` says so and points to the owner script.
 - A live mode switch in the Advanced section. It stays off with the reply `Canlı mod için ajan cüzdanı kurulmadı` unless the Agent API key, `AGENT_ID`, and `GRANT_TOKEN` are all set.
 - In live mode, Enter alone never confirms. You must type `evet` or `yes`, or press a separate Confirm button. Execution is still not connected, so even a live confirmation replies that no funds moved.
 
 ## Planned, not built yet
 
-- Live execution through a policy-bound Agent API wallet. It is mainnet only and uses real funds, so it will stay off by default, use a separate account with small amounts, and require explicit user confirmation for every action. `app/agent_api.py` is the client for it, written from the Agent API docs and tested against a mock. It has never made a real call, and `app/main.py` does not use its money methods.
+- Live execution through a policy-bound Agent API wallet. It is mainnet only and uses real funds, so it will stay off by default, use a separate account with small amounts, and require explicit user confirmation for every action. `app/agent_api.py` is the client for it, written from the Agent API docs and tested against a mock. It has never made a real authenticated call, and `app/main.py` does not use its money methods.
+
+## Owner setup
+
+This needs real funds on NEAR mainnet, and nothing here has been run against it yet. It needs Node 20 or later, because signing uses `near-api-js`.
+
+```sh
+cd scripts/owner
+npm ci --ignore-scripts
+cd ../..
+node scripts/owner/generate_key.mjs
+```
+
+The generator writes a new ed25519 key to `.env`, which must be ignored by git, and prints only the owner's implicit account address. It refuses to replace an existing key. There is no recovery for a lost owner key, so back it up. The account appears on chain when it receives its first transfer of NEAR.
+
+`python scripts/owner_setup.py plan` prints the rules and a code, and signs nothing. `create --onay=CODE` and `grant --onay=CODE` sign only those saved rules, and stop if the API prepared anything different. `freeze --onay=dondur` stops the agent, and `unfreeze --onay=ac` starts it again.
+
+The rules: swap, plus withdraw only to the owner's address, for USDC on NEAR and Base, wNEAR, SOL, and ETH, with 10 dollars a day and 10 actions an hour. The API has no per-transaction dollar cap, so the 5 dollar cap is converted to token amounts at the prices when the plan was made. If a token's price rises, that cap rises in dollars. The daily cap stays in dollars.
+
+The signing approach follows the Agent API documentation and its examples. That examples repository states no license, so no code was copied from it.
 
 ## How NEAR is used
 
@@ -62,7 +82,7 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 
 ## Try it: do X, see Y
 
-Prices below are examples, so your numbers will differ. Steps 3 to 10 need a key. Each step starts from an empty text box.
+Prices below are examples, so your numbers will differ. Steps 3 to 10 and step 12 need a key. Each step starts from an empty text box.
 
 1. Do: run `python -m pytest -q`. See: all tests pass, with no network calls.
 2. Do: open http://127.0.0.1:8000 and press Tab. See: focus lands on the text box labelled `Ne yapmak istiyorsun?`, and a screen reader also reads the shortcuts.
@@ -74,10 +94,11 @@ Prices below are examples, so your numbers will differ. Steps 3 to 10 need a key
 8. Do: type `swap 2 NEAR to USDC` and press Enter, then Tab to the first `Copy` button and press Enter. See: `Copied.` Press Esc to cancel the quote.
 9. Do: type `merhaba` and press Enter. See: a short Turkish help message. Then press Alt+H. See: how to use the page and its shortcuts.
 10. Do: type `5 ABCD'yi SOL'a çevir` and press Enter. See: `ABCD tokenini bulamadım. Token adını kontrol edip yeniden yaz.`
-11. Do: in Chrome or Edge, press Alt+M and allow the microphone, then say `bir SOL kaç dolar`. See: `Dinliyorum`, then `Anladım: ...`, and the text in the box. Nothing is sent until you press Enter.
-12. Do: Tab to the Advanced section and press Enter to open it, then press Enter on the `Canlı mod` button. See: `Canlı mod için ajan cüzdanı kurulmadı. Deneme modunda devam edebilirsin.` This step needs no key.
-13. Do: Tab to the submit button in the Advanced section and press Enter. See: a dry quote from the field-based form, with focus back in the text box for your answer. This step needs no key.
-14. Do: call the API directly:
+11. Do: type `politikamı oku` and press Enter, then do the same with `bütçem ne kadar kaldı` and `ajanı dondur`. See: `Ajan cüzdanı kurulmadı. Kurulum bitince yeniden dene.` each time. This step needs no key.
+12. Do: in Chrome or Edge, press Alt+M and allow the microphone, then say `bir SOL kaç dolar`. See: `Dinliyorum`, then `Anladım: ...`, and the text in the box. Nothing is sent until you press Enter.
+13. Do: Tab to the Advanced section and press Enter to open it, then press Enter on the `Canlı mod` button. See: `Canlı mod için ajan cüzdanı kurulmadı. Deneme modunda devam edebilirsin.` This step needs no key.
+14. Do: Tab to the submit button in the Advanced section and press Enter. See: a dry quote from the field-based form, with focus back in the text box for your answer. This step needs no key.
+15. Do: call the API directly:
 
 ```sh
 curl -X POST http://127.0.0.1:8000/api/quote -H "Content-Type: application/json" -d "{\"from_token\":\"NEAR\",\"to_token\":\"USDC\",\"amount\":\"1\",\"lang\":\"en\"}"
@@ -125,6 +146,7 @@ All settings are optional in dry mode. See `.env.example`. Keys belong in `.env`
 ## Stack and disclosures
 
 - Backend: Python, FastAPI, httpx, uvicorn, python-dotenv. Tests: pytest.
+- Owner signing: Node with `near-api-js`.
 - Frontend: plain HTML and vanilla JavaScript, no framework.
 - All code was written for this hackathon, with AI assistance from Claude Code.
 - NEAR agent skills `near-intents` and `near-ai-cloud` were used as references. `skills-lock.json` records them.

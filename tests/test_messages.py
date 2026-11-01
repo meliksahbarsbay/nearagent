@@ -33,6 +33,10 @@ ERROR_KEYS = [
     "live_not_configured",
     "live_not_connected",
     "live_needs_word",
+    "no_agent",
+    "agent_read_failed",
+    "policy_not_ready",
+    "freeze_manual",
 ]
 
 
