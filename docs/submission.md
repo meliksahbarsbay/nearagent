@@ -13,6 +13,7 @@ Bu dosyaya e-posta, NEAR adresi ya da doldurulmuş başvuru verisi yazıp commit
 ## Göndermeden önce
 
 - Repoyu herkese açık yap. Şu an özel. Başvuruda da açık olmalı, hakem süreci boyunca da açık kalmalı.
+- e-posta: bilerek açık bırakıldı. Commit bilgisindeki adres public olunca görünür, geçmiş yeniden yazılmadı.
 - Demo postunu yayınla ve linkini al.
 - Herkese açık demo kurduysan en az 2026-11-18'e kadar, tercihen 2026-11-25'e kadar açık tut.
 - Aşağıdaki durum cümlelerinin hâlâ doğru olduğunu kontrol et.
