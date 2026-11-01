@@ -4,6 +4,20 @@ Toplam süre 2 dakika. Üç sahne var. Türkçe ve İngilizce için iki ayrı ka
 
 Anlatıcı NVDA konuşurken susar. Bu videonun asıl sesi NVDA'dır.
 
+## Kural kontrolü
+
+Kurallar: https://nearhackathon.com/HACKATHON.md, "A good demo post" bölümü.
+
+- Problemle başlıyor: evet, ilk cümle kullanıcının sorunu.
+- Tek tam an: sahne 1 baştan sona tek bir an. Yazıyorsun, Enter'a basıyorsun, sonucu duyuyorsun, onaylıyorsun. Sahne 2 ve 3 ek gösterimdir.
+- Uzun giriş, mimari slaytı ve kurulum yok.
+- NEAR'ın rolü somut: sahne 1 NEAR Intents'in ne yaptığını, sahne 3 Agent API'nin ne yaptığını söylüyor.
+- Sonraki adım: kapanış ekranında demo, repo ve soru var.
+- Ajan kurulamazsa sahne 3'ü çıkar, sahne 1'i uzat. Sahneyi taklit etme.
+- NEAR AI Cloud'dan söz edilmiyor, çünkü bu projede şu an NEAR AI anahtarı yok. Anahtar eklenip denenirse kapanışa eklenebilir.
+
+Herkese açık demo yoksa bu video zorunlu hale gelir. Hakemler demoyu açamıyorsa ekran görüntüsü yetmez.
+
 ## Çekimden önce
 
 - Sahne 3 şu an çekilemez. Bu projede ajan kurulu değil, `.env` içinde yalnızca `OPENAI_API_KEY` var. Komut bugün `Ajan cüzdanı kurulmadı` der. Önce README'deki fonlama adımlarını bitir. Bu adımlar gerçek para ister: yaklaşık 0,1 NEAR ve 10 USDC.
@@ -31,7 +45,7 @@ NVDA okur: "Deneme modu. Veriyorsun: 2 wNEAR. Alıyorsun: yaklaşık ... USDC. E
 
 Not: Uygulama zincir seçtiyse araya bunu söyleyen kısa bir cümle girer.
 
-Anlatıcı: "Sıra hep aynı. Ne veriyorsun, ne alıyorsun, en az ne garanti, ücret ne."
+Anlatıcı: "Sıra hep aynı. Teklifi NEAR Intents verir. Tek cümleyle zincirler arası fiyat alırsın, köprü ekranı gerekmez."
 
 Ekranda: Boş kutuda Enter'a basılır.
 
@@ -57,7 +71,7 @@ NVDA okur: "1 SOL yaklaşık ... dolar. Solana üzerindeki SOL'u kullandım; ba�
 
 ### Sahne 3: Politika okuma ve ajanı dondurma (1:25 - 2:00)
 
-Anlatıcı: "Ajan kurallarla çalışır. Kuralları da duyarak öğrenirsin."
+Anlatıcı: "Ajanın kuralları NEAR Intents Agent API'de durur: izinli işlemler ve günlük bütçe. Sen de onları duyarak öğrenirsin."
 
 Ekranda: `politikamı oku` yazılır, Enter'a basılır.
 
@@ -69,13 +83,13 @@ Ekranda: `ajanı dondur` yazılır, Enter'a basılır.
 
 NVDA okur: "Ajan donduruldu, hiçbir işlem yapamaz. Açmak için ajanı çöz de."
 
-Anlatıcı: "Bu sadece API onaylayınca söylenir. nearagent, NEAR Intents ve NEAR AI Cloud ile NEAR HACKATHON için yapıldı."
+Anlatıcı: "Bu sadece API onaylayınca söylenir. nearagent, NEAR HACKATHON'da yapıldı. Ücret önce mi okunmalı? Söyle."
 
-Ekranda: Proje adı ve GitHub adresi yazılır.
+Ekranda: Proje adı, demo adresi, GitHub adresi ve `Ücret, alacağın tutardan önce mi okunmalı?` sorusu yazılır.
 
 ## English script
 
-The Turkish reply text changes with the page language. Before recording, open the Advanced section and set the language to English, so that voice input listens in English.
+Replies follow the language of the sentence, but voice input follows the page language. Before recording, open the Advanced section and set the language to English.
 
 ### Scene 1: Keyboard swap with NVDA, dry mode (0:00 - 0:55)
 
@@ -89,7 +103,7 @@ NVDA reads: "Dry run. You give: 2 wNEAR. You get: about ... USDC. Guaranteed min
 
 Note: If the app picked a chain, a short sentence saying so comes before the question.
 
-Narrator: "Always the same order. What you give, what you get, the guaranteed minimum, and the fee."
+Narrator: "Always the same order. NEAR Intents supplies the quote, so one sentence can price a swap across chains, with no bridge screens."
 
 On screen: Press Enter on the empty box.
 
@@ -115,7 +129,7 @@ NVDA reads: "1 SOL is about ... dollars. I used SOL on Solana; tell me if you wa
 
 ### Scene 3: Reading the policy and freezing the agent (1:25 - 2:00)
 
-Narrator: "The agent works within rules, and you can hear those rules."
+Narrator: "The agent's rules live in the NEAR Intents Agent API: allowed actions and a daily budget. You can hear them too."
 
 On screen: Type `read my policy` and press Enter.
 
@@ -127,6 +141,6 @@ On screen: Type `freeze the agent` and press Enter.
 
 NVDA reads: "The agent is frozen and can do nothing. To resume, say unfreeze the agent."
 
-Narrator: "It only says that after the API confirms it. nearagent uses NEAR Intents and NEAR AI Cloud, and was made for NEAR HACKATHON."
+Narrator: "It only says that after the API confirms it. nearagent was built at NEAR HACKATHON. Should the fee come first? Tell us."
 
-On screen: The project name and GitHub address.
+On screen: The project name, demo address, GitHub address, and the question `Should the fee be read before the amount you get?`

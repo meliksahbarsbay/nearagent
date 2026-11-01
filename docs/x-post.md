@@ -1,51 +1,74 @@
 # X postu taslağı
 
-Bu yalnızca taslak. Gönderilmedi.
+Bu yalnızca taslak. Gönderilmedi. Postu sen yayınlarsın.
 
-## Önce oku
+Kurallar: https://nearhackathon.com/HACKATHON.md, "A good demo post" bölümü. Başvurudan önce dosyayı yeniden oku, çünkü kurallar değişebilir.
 
-`HACKATHON.md` bu repoda, git geçmişinde ve bilgisayardaki aramalarda bulunamadı. Bu taslak o dosyadaki kurallara göre kontrol edilmedi. Dosya gelince yeniden kontrol edilmeli.
+## Neden iki parça
 
-Şimdilik iki ikincil kaynaktaki bilgi kullanıldı. Resmî kurallar sayfası bulunamadı:
+Kuralların hepsi 280 karaktere anlamlı biçimde sığmadı. Tek post 373 karakter tuttu. Bu yüzden iki parça var:
 
-- Post, işin NEAR HACKATHON için yapıldığını söylemeli.
-- Posta video ya da ekran görüntüsü eklenmeli.
-- Herkese açık repo ve X postu birlikte teslim ediliyor.
+- Ana post: problem, tek an, hackathon ifadesi, zorunlu etiketler ve video.
+- Yanıt: NEAR'ın rolü, linkler ve gerçek bir soru. Ana postun hemen altına ekle.
 
-Kaynaklar:
+Başvurudaki `demoUrl` alanına ana postun linkini yaz. X Premium hesabın varsa iki parçayı tek postta birleştirebilirsin.
 
-- https://www.aiposthub.com/near-hackathon-ai-judges-2026/
-- https://www.tronweekly.com/near-protocol-advances-its-ecosystem-as-near-price-outlook-improves/
+## Kural kontrolü
+
+- İlk satır problemi anlatıyor ve projeyi bilmeyen biri de anlıyor.
+- Tek bir tam an var: cümleyi yazıp Enter'a basıyorsun, NVDA sonucu okuyor.
+- NEAR'ın rolü somut: NEAR Intents teklifi veriyor, tek cümle zincirler arası fiyat alıyor.
+- Sonraki adım var: demo ve repo linki.
+- Gerçek soru var: ücret, alınacak tutardan önce mi okunmalı?
+- `@NEARProtocol` ve `#NEARHackathon` ana postta var.
+- `@NearLegion` ve `@NearBuilders` isteğe bağlı, yanıtta duruyor.
+- NEAR AI Cloud ve dondurma bu postta yok. NEAR AI bugün bağlı değil, ajan da kurulu değil. Doğrulanmamış bir şeyi söylememek için çıkardım.
 
 ## Paylaşmadan önce
 
-- `[DEMO_LINK]` yerine herkese açık demo adresini yaz.
-- Repo şu an özel. Paylaşmadan önce herkese açık yap, yoksa link kimseye açılmaz.
-- Posta `docs/demo-video.md` videosunu ekle.
-- Dondurma cümlesini ancak sahne 3 gerçek ajanla çekildiyse kullan. Çekilmediyse o cümleyi sil.
+- Repo şu an özel. En geç 2026-11-14 23:59 UTC'de herkese açık olmalı, yoksa link açılmaz ve hakemler göremez.
+- Ana posta videoyu ekle. Bu zorunlu.
+- `[DEMO_LINK]` ve `[REPO_LINK]` yerlerini sen doldur.
+- Herkese açık demo yoksa Demo satırını sil. Lokal demo da kabul ediliyor, ama o zaman video şart.
 
 ## English
 
-Built for NEAR HACKATHON: nearagent, a crypto assistant for screen readers.
+Main post:
 
-Type or say a swap. It reads the quote aloud and waits for OK. One sentence freezes the agent.
+On a screen reader, you often can't tell what a crypto swap will cost.
 
-Dry mode: no funds move.
+nearagent: type "swap 2 NEAR to USDC", press Enter, and NVDA reads the amounts, guaranteed minimum and fee. Dry mode: no funds move.
 
-[DEMO_LINK]
-https://github.com/meliksahbarsbay/nearagent
+Built at NEAR HACKATHON @NEARProtocol #NEARHackathon
 
-@NEARProtocol #NEARHackathon
+Reply:
+
+NEAR Intents supplies the quote, so one sentence can price a swap across chains, with no bridge screens.
+
+Demo: [DEMO_LINK]
+Repo: [REPO_LINK]
+
+Screen reader users: should the fee be read before the amount you get?
+
+@NearLegion @NearBuilders
 
 ## Türkçe
 
-NEAR HACKATHON için yaptım: nearagent, ekran okuyucular için bir kripto asistanı.
+Ana post:
 
-Takası yaz ya da söyle. Teklifi okur, onayını bekler. Tek cümle ajanı dondurur.
+Ekran okuyucuyla bir kripto takasının maliyetini çoğu zaman anlayamazsın.
 
-Deneme modu: para hareket etmez.
+nearagent: "2 NEAR'ı USDC'ye çevir" yaz, Enter'a bas. NVDA tutarları, en az garantiyi ve ücreti okur. Deneme modu: para hareket etmez.
 
-[DEMO_LINK]
-https://github.com/meliksahbarsbay/nearagent
+NEAR HACKATHON'da yapıldı @NEARProtocol #NEARHackathon
 
-@NEARProtocol #NEARHackathon
+Yanıt:
+
+Teklifi NEAR Intents verir. Tek cümleyle zincirler arası fiyat alırsın, köprü ekranı gerekmez.
+
+Demo: [DEMO_LINK]
+Repo: [REPO_LINK]
+
+Ekran okuyucu kullananlara soru: ücret, alacağın tutardan önce mi okunmalı?
+
+@NearLegion @NearBuilders
