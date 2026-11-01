@@ -303,7 +303,7 @@ async def run_price(client: OneClick, intent: Intent) -> dict:
 async def run_intent(client: OneClick, intent: Intent, live: bool = False) -> dict:
     lang = intent.language
     if intent.action == "help":
-        return reply("help", "help", lang)
+        return reply("help", "help_live" if live else "help", lang)
     if intent.action == "price":
         return await run_price(client, intent)
     swap = {

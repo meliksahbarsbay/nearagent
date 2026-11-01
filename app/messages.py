@@ -57,8 +57,8 @@ MESSAGES = {
         "code_wrong": "Kod uymuyor. Kodu yeniden yaz ya da vazgeçmek için hayır de.",
         "code_locked": "Kod üç kez yanlış girildi, hiçbir şey imzalanmadı. Yeniden denemek için ajanı çöz de.",
         "mode_dry": "Deneme modu.",
-        "mode_live": "Canlı mod.",
-        "live_on": "Canlı mod açık. Onay için evet yazman ya da Onayla düğmesine basman gerekir.",
+        "mode_live": "Canlı mod, gerçek para.",
+        "live_on": "Canlı mod açık, onayladığın takaslar gerçek para kullanır. Onay için evet yaz ya da Onayla düğmesine bas.",
         "live_off": "Canlı mod kapalı. Deneme modundasın, para hareket etmez.",
         "live_not_configured": "Canlı mod için ajan cüzdanı kurulmadı. Deneme modunda devam edebilirsin.",
         "live_needs_word": "Canlı modda Enter onay sayılmaz. Evet yaz ya da Onayla düğmesine bas.",
@@ -152,7 +152,11 @@ MESSAGES = {
         "assumed_join": " ve ",
         "help": (
             "Takas teklifi ve fiyat söyleyebilirim. Örnek: 2 NEAR'ı USDC'ye çevir, "
-            "ya da 1 SOL kaç dolar. Şimdilik yalnızca deneme modu var, para hareket etmez."
+            "ya da 1 SOL kaç dolar. Deneme modundasın, para hareket etmez."
+        ),
+        "help_live": (
+            "Takas teklifi ve fiyat söyleyebilirim. Örnek: 2 NEAR'ı USDC'ye çevir, "
+            "ya da 1 SOL kaç dolar. Canlı mod açık, onayladığın takaslar gerçek para kullanır."
         ),
         "empty_text": "Cümle boş. Bir cümle yaz, örneğin 1 SOL kaç dolar.",
         "too_long": "Cümle çok uzun. Daha kısa yaz.",
@@ -197,8 +201,8 @@ MESSAGES = {
         "code_wrong": "That code does not match. Type it again, or say no to stop.",
         "code_locked": "The code was wrong three times, so nothing was signed. To try again, say unfreeze the agent.",
         "mode_dry": "Dry run.",
-        "mode_live": "Live mode.",
-        "live_on": "Live mode is on. To confirm, type yes or press the Confirm button.",
+        "mode_live": "Live mode, real money.",
+        "live_on": "Live mode is on, and swaps you confirm use real money. To confirm, type yes or press the Confirm button.",
         "live_off": "Live mode is off. You are in dry mode, so no funds move.",
         "live_not_configured": "The agent wallet for live mode is not set up. You can continue in dry mode.",
         "live_needs_word": "Enter does not confirm in live mode. Type yes or press the Confirm button.",
@@ -292,7 +296,11 @@ MESSAGES = {
         "assumed_join": " and ",
         "help": (
             "I can give swap quotes and prices. For example: swap 2 NEAR to USDC, "
-            "or what is 1 SOL worth. Only dry mode exists for now, so no funds move."
+            "or what is 1 SOL worth. You are in dry mode, so no funds move."
+        ),
+        "help_live": (
+            "I can give swap quotes and prices. For example: swap 2 NEAR to USDC, "
+            "or what is 1 SOL worth. Live mode is on, and swaps you confirm use real money."
         ),
         "empty_text": "The sentence is empty. Type one, for example what is 1 SOL worth.",
         "too_long": "That sentence is too long. Try a shorter one.",

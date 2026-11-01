@@ -3,6 +3,11 @@
 const TEXT = {
   tr: {
     intro: "Token takası için deneme teklifi ve fiyat söyler. Para hareket etmez.",
+    introLive: "Canlı mod açık. Onayladığın takaslar gerçek para kullanır.",
+    modeDry: "Mod: Deneme",
+    modeLive: "Mod: Canlı, gerçek para",
+    micOn: "Mikrofon açık, dinliyorum.",
+    languageSet: "Dil Türkçe oldu.",
     sentence: "Ne yapmak istiyorsun?",
     send: "Gönder",
     heading: "Sonuç",
@@ -12,14 +17,19 @@ const TEXT = {
     to: "Alınan token",
     amount: "Miktar",
     submit: "Deneme teklifi al",
+    submitLive: "Canlı teklif al, gerçek para",
     busy: "Yanıt bekleniyor.",
     failed: "Sunucuya ulaşılamadı. Uygulamanın çalıştığını kontrol et, sonra yeniden dene.",
     shortcuts:
       "Kısayollar: Enter gönderir ya da onaylar. Esc iptal eder. Alt M mikrofonu açar. Alt R son cevabı tekrar okur. Alt H yardımı okur.",
+    shortcutsLive:
+      "Kısayollar: Enter gönderir, onaylamaz. Onay için evet yaz. Esc iptal eder. Alt M mikrofonu açar. Alt R son cevabı tekrar okur. Alt H yardımı okur.",
+    helpLive:
+      "Canlı mod açık, onayladığın takaslar gerçek para kullanır. Bir cümle yaz ve Enter'a bas. Teklif okununca onaylamak için evet yaz ya da Onayla düğmesine bas, Enter onay sayılmaz. Esc ya da hayır iptal eder. Alt M mikrofonu açar. Alt R son cevabı tekrar okur. Komutlar: cüzdanımda ne var, son işlemlerimi oku, politikamı oku, bütçem ne kadar kaldı, ajanı dondur, ajanı çöz.",
     help:
       "Bir cümle yaz ve Enter'a bas, örneğin 2 NEAR'ı USDC'ye çevir. Teklif okununca Enter ya da evet onaylar, Esc ya da hayır iptal eder. Alt M mikrofonu açar. Alt R son cevabı tekrar okur. Komutlar: cüzdanımda ne var, son işlemlerimi oku, politikamı oku, bütçem ne kadar kaldı, ajanı dondur, ajanı çöz.",
     mic: "Mikrofon",
-    confirm: "Onayla",
+    confirm: "Onayla, gerçek para",
     live: "Canlı mod",
     listening: "Dinliyorum",
     heard: "Anladım:",
@@ -48,6 +58,11 @@ const TEXT = {
   },
   en: {
     intro: "Tells you swap quotes and prices. No funds move.",
+    introLive: "Live mode is on. Swaps you confirm use real money.",
+    modeDry: "Mode: Dry run",
+    modeLive: "Mode: Live, real money",
+    micOn: "Microphone on, listening.",
+    languageSet: "Language set to English.",
     sentence: "What do you want to do?",
     send: "Send",
     heading: "Result",
@@ -57,14 +72,19 @@ const TEXT = {
     to: "Token to receive",
     amount: "Amount",
     submit: "Get dry-run quote",
+    submitLive: "Get live quote, real money",
     busy: "Waiting for a reply.",
     failed: "Could not reach the server. Check that the app is running, then try again.",
     shortcuts:
       "Shortcuts: Enter sends or confirms. Escape cancels. Alt M turns on the microphone. Alt R repeats the last reply. Alt H reads the help.",
+    shortcutsLive:
+      "Shortcuts: Enter sends and does not confirm. To confirm, type yes. Escape cancels. Alt M turns on the microphone. Alt R repeats the last reply. Alt H reads the help.",
+    helpLive:
+      "Live mode is on, and swaps you confirm use real money. Type a sentence and press Enter. After a quote, type yes or press the Confirm button to confirm. Enter does not confirm. Escape or no cancels. Alt M turns on the microphone. Alt R repeats the last reply. Commands: what is my balance, read my recent trades, read my policy, how much budget is left, freeze the agent, unfreeze the agent.",
     help:
       "Type a sentence and press Enter, for example swap 2 NEAR to USDC. After a quote, Enter or yes confirms, and Escape or no cancels. Alt M turns on the microphone. Alt R repeats the last reply. Commands: what is my balance, read my recent trades, read my policy, how much budget is left, freeze the agent, unfreeze the agent.",
     mic: "Microphone",
-    confirm: "Confirm",
+    confirm: "Confirm, real money",
     live: "Live mode",
     listening: "Listening",
     heard: "I heard:",
@@ -109,11 +129,12 @@ const byId = (id) => document.getElementById(id);
 const langSelect = byId("lang");
 const result = byId("result");
 const sentence = byId("sentence");
-let language = langSelect.value;
+let language = (navigator.language || "").toLowerCase().startsWith("tr") ? "tr" : "en";
 let controller = null;
 let pending = null;
 let lastReply = "";
 let lastIds = [];
+let drawnIds = "";
 let announceTimer = 0;
 let liveMode = false;
 let listening = null;
@@ -127,9 +148,22 @@ function announce(message) {
   }, ANNOUNCE_DELAY_MS);
 }
 
+// Focus returns to the same identifier, else the same place, and last to the text box.
+function restoreFocus(value, place) {
+  const buttons = [...byId("ids").querySelectorAll("button")];
+  const same = buttons.find((button) => button.dataset.value === value);
+  (same || buttons[place] || buttons[0] || sentence).focus();
+}
+
 function renderIds() {
+  // Drawing again would destroy the focused button, so an unchanged list stays as it is.
+  const drawing = JSON.stringify([language, lastIds]);
+  if (drawing === drawnIds) return;
+  drawnIds = drawing;
   const text = TEXT[language];
   const list = byId("ids");
+  const place = [...list.querySelectorAll("button")].indexOf(document.activeElement);
+  const focusedValue = place >= 0 ? document.activeElement.dataset.value : null;
   list.replaceChildren();
   byId("ids-section").hidden = lastIds.length === 0;
   byId("ids-heading").textContent = text.idsHeading;
@@ -146,10 +180,12 @@ function renderIds() {
     button.type = "button";
     button.textContent = text.copy;
     button.setAttribute("aria-label", `${name}: ${text.copy}`);
+    button.dataset.value = value;
     button.addEventListener("click", () => copy(value));
     item.append(label, shown, button);
     list.append(item);
   }
+  if (place >= 0) restoreFocus(focusedValue, place);
 }
 
 async function copy(value) {
@@ -161,13 +197,24 @@ async function copy(value) {
   }
 }
 
+// Everything that says which mode this is, so no dry-run text survives into live mode.
+function paintMode() {
+  const text = TEXT[language];
+  byId("intro").textContent = liveMode ? text.introLive : text.intro;
+  byId("submit").textContent = liveMode ? text.submitLive : text.submit;
+  byId("shortcuts").textContent = liveMode ? text.shortcutsLive : text.shortcuts;
+  const state = byId("mode-state");
+  state.textContent = liveMode ? text.modeLive : text.modeDry;
+  state.dataset.live = String(liveMode);
+  byId("live-toggle").setAttribute("aria-pressed", String(liveMode));
+}
+
 function applyLanguage(next) {
   language = next;
   langSelect.value = next;
   document.documentElement.lang = next;
   result.lang = next;
   const text = TEXT[next];
-  byId("intro").textContent = text.intro;
   byId("sentence-label").textContent = text.sentence;
   byId("ask-submit").textContent = text.send;
   byId("result-heading").textContent = text.heading;
@@ -176,11 +223,11 @@ function applyLanguage(next) {
   byId("from-label").textContent = text.from;
   byId("to-label").textContent = text.to;
   byId("amount-label").textContent = text.amount;
-  byId("submit").textContent = text.submit;
-  byId("shortcuts").textContent = text.shortcuts;
   byId("mic").textContent = text.mic;
   byId("confirm").textContent = text.confirm;
   byId("live-toggle").textContent = text.live;
+  byId("mic-state").textContent = text.micOn;
+  paintMode();
   renderIds();
 }
 
@@ -214,8 +261,11 @@ async function followSwap(track) {
       const data = await response.json();
       if (data.state !== state) {
         state = data.state;
-        rememberIds(data);
-        renderIds();
+        // A plain state change touches no identifier, so the list keeps its focus.
+        if (data.proof || data.final) {
+          rememberIds(data);
+          renderIds();
+        }
         lastReply = data.spoken;
         announce(lastReply);
       }
@@ -243,7 +293,11 @@ async function send(path, body, button) {
     });
     const data = await response.json();
     pending = data.pending || null;
-    byId("confirm").hidden = !data.confirm_button;
+    const confirmButton = byId("confirm");
+    const confirmHadFocus = document.activeElement === confirmButton;
+    confirmButton.hidden = !data.confirm_button;
+    // Hiding a focused button drops focus to the page, and this is the moment money moves.
+    if (confirmHadFocus && confirmButton.hidden) sentence.focus();
     rememberIds(data);
     if (data.language in TEXT) applyLanguage(data.language);
     if (response.ok || pending) sentence.value = "";
@@ -275,7 +329,7 @@ async function setLiveMode(next) {
     });
     const data = await response.json();
     if (response.ok) liveMode = data.live;
-    byId("live-toggle").setAttribute("aria-pressed", String(liveMode));
+    paintMode();
     lastReply = data.spoken || TEXT[language].failed;
     announce(lastReply);
   } catch {
@@ -283,8 +337,13 @@ async function setLiveMode(next) {
   }
 }
 
+function showListening(on) {
+  byId("mic").setAttribute("aria-pressed", String(on));
+  byId("mic-state").hidden = !on;
+}
+
 function stopListening() {
-  byId("mic").setAttribute("aria-pressed", "false");
+  showListening(false);
   listening = null;
 }
 
@@ -305,7 +364,7 @@ function toggleListening() {
   session.interimResults = false;
   session.maxAlternatives = 1;
   session.onstart = () => {
-    byId("mic").setAttribute("aria-pressed", "true");
+    showListening(true);
     announce(text.listening);
   };
   session.onresult = (event) => {
@@ -343,7 +402,8 @@ function cancel() {
   } else if (pending) {
     ask("iptal");
   } else {
-    sentence.value = "";
+    // A sentence is cleared only from its own box, so Esc elsewhere loses nothing.
+    if (document.activeElement === sentence) sentence.value = "";
     announce(TEXT[language].nothingToCancel);
   }
 }
@@ -391,12 +451,15 @@ document.addEventListener("keydown", (event) => {
     announce(lastReply || TEXT[language].nothing);
   } else if (key === "h") {
     event.preventDefault();
-    announce(TEXT[language].help);
+    announce(liveMode ? TEXT[language].helpLive : TEXT[language].help);
   } else if (key === "m") {
     event.preventDefault();
     toggleListening();
   }
 });
 
-langSelect.addEventListener("change", () => applyLanguage(langSelect.value));
+langSelect.addEventListener("change", () => {
+  applyLanguage(langSelect.value);
+  announce(TEXT[language].languageSet);
+});
 applyLanguage(language);

@@ -323,6 +323,8 @@ def protect(main, settings: Settings | None = None, make_transport=httpx.AsyncHT
     settings = settings or Settings.from_env()
     for name in AGENT_SECRETS:
         os.environ.pop(name, None)
+    # Trade history is one local file, and every visitor here would share it.
+    main.history.enabled = False
 
     budget = DailyBudget(settings.daily_budget_usd)
     parse = main.parse_intent

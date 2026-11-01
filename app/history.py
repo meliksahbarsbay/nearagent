@@ -18,6 +18,9 @@ KEEP = 50
 
 
 class History:
+    # A shared server must not read one visitor's trades to the next.
+    enabled = True
+
     def path(self) -> Path:
         return Path(os.getenv("HISTORY_PATH") or DEFAULT_PATH)
 
@@ -39,6 +42,8 @@ class History:
 
     def add(self, **entry) -> str:
         key = secrets.token_hex(8)
+        if not self.enabled:
+            return key
         record = {"id": key, "at": datetime.now(timezone.utc).isoformat(), **entry}
         try:
             self._write([*self._read(), record])
@@ -58,6 +63,8 @@ class History:
 
     def recent(self, count: int) -> list[dict]:
         """Newest first. An unreadable file raises, so the page can say so."""
+        if not self.enabled:
+            return []
         return list(reversed(self._read()[-count:]))
 
 

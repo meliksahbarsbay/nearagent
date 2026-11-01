@@ -220,7 +220,7 @@ def test_quote_reads_the_terms_and_sends_nothing(agent):
     assert data["mode"] == "live"
     assert data["confirm_button"] is True
     assert data["spoken"].startswith(
-        "Canlı mod. Veriyorsun: 4 USDC. Alıyorsun: yaklaşık 0,004 SOL. "
+        "Canlı mod, gerçek para. Veriyorsun: 4 USDC. Alıyorsun: yaklaşık 0,004 SOL. "
         "En az garanti: 0,00396 SOL. Ücret: yaklaşık 0,02 dolar. "
         "Süre: yaklaşık 12 saniye. Teklif 2 dakika geçerli."
     )
@@ -723,3 +723,18 @@ def test_money_stays_behind_the_live_module():
 
 def test_tests_cannot_reach_a_network(agent):
     assert live.client().transport is agent.transport
+
+
+def test_help_warns_about_real_money_in_live_mode(agent, monkeypatch):
+    client, _ = make_client()
+    use_intent(monkeypatch, action="help")
+    data = client.post("/api/ask", json={"text": "x", "live": True}).json()
+    assert "gerçek para" in data["spoken"]
+    assert "para hareket etmez" not in data["spoken"]
+
+
+def test_help_stays_calm_in_dry_mode(no_live, monkeypatch):
+    client, _ = make_client()
+    use_intent(monkeypatch, action="help")
+    data = client.post("/api/ask", json={"text": "x"}).json()
+    assert "para hareket etmez" in data["spoken"]

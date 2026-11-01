@@ -18,6 +18,11 @@
     #ids li { margin-top: 1rem; }
     #ids code { display: block; overflow-wrap: anywhere; font-size: 0.875rem; }
     #ids button { margin-top: 0.25rem; }
+    #language-row { margin-top: 1rem; }
+    #mode-state { font-weight: 600; }
+    #mode-state[data-live="true"] { padding: 0.5rem; border: 4px double currentColor; }
+    #mic-state { font-weight: 600; }
+    button[aria-pressed="true"] { border: 4px double currentColor; text-decoration: underline; }
     .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
   </style>
 </head>
@@ -25,14 +30,24 @@
   <main>
     <h1>nearagent</h1>
     <p id="intro"></p>
+    <p id="mode-state" data-live="false"></p>
     <form id="ask-form" novalidate>
       <label for="sentence" id="sentence-label"></label>
       <input id="sentence" autocomplete="off" spellcheck="false" maxlength="300" aria-describedby="shortcuts">
       <p id="shortcuts" class="visually-hidden"></p>
       <button type="button" id="mic" aria-pressed="false"></button>
       <button type="submit" id="ask-submit"></button>
+      <p id="mic-state" hidden></p>
       <button type="button" id="confirm" hidden></button>
     </form>
+
+    <div id="language-row">
+      <label for="lang" id="lang-label"></label>
+      <select id="lang">
+        <option value="tr">Türkçe</option>
+        <option value="en">English</option>
+      </select>
+    </div>
 
     <h2 id="result-heading"></h2>
     <div id="result" role="status" aria-live="polite" aria-atomic="true"></div>
@@ -46,12 +61,6 @@
       <summary id="advanced-summary"></summary>
       <button type="button" id="live-toggle" aria-pressed="false"></button>
       <form id="quote-form" novalidate>
-        <label for="lang" id="lang-label"></label>
-        <select id="lang">
-          <option value="tr">Türkçe</option>
-          <option value="en">English</option>
-        </select>
-
         <label for="from-token" id="from-label"></label>
         <input id="from-token" autocomplete="off" spellcheck="false" value="NEAR">
 

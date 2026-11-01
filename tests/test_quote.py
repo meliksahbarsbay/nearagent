@@ -390,3 +390,12 @@ def test_page_is_served():
     assert 'aria-describedby="shortcuts"' in response.text
     assert 'id="mic"' in response.text
     assert 'id="live-toggle"' in response.text
+
+
+def test_language_choice_is_outside_the_advanced_section():
+    client, _ = make_client()
+    page = client.get("/").text
+    assert page.index('id="lang"') < page.index("<details>")
+    assert 'id="mode-state"' in page
+    assert 'id="mic-state"' in page
+    assert 'button[aria-pressed="true"]' in page

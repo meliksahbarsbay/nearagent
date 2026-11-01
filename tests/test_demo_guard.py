@@ -95,6 +95,15 @@ def public(monkeypatch):
     return build
 
 
+def test_visitors_never_hear_each_others_trades(public):
+    client, _ = public(Settings())
+    main.history.add(mode="dry", status="dry", gave="1", gave_symbol="A", got="1", got_symbol="B")
+    data = client.post("/api/ask", json={"text": "son işlemlerimi oku"}).json()
+    assert data["spoken"].startswith("Henüz kayıtlı işlem yok.")
+    assert data["copies"] == []
+    assert main.history.path().exists() is False
+
+
 def test_rate_limit_per_minute_then_a_new_minute_opens():
     now = [120.0]
     limiter = RateLimiter(2, 100, clock=lambda: now[0])
