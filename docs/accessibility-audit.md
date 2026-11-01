@@ -2,15 +2,46 @@
 
 Tarih: 2026-11-01. Hedef: WCAG 2.2 AA.
 
-Bu dosya denetimin kaydıdır. Aşağıdaki bulgular denetim anını anlatır, sonuçlar değişmedi.
+Bu dosya denetimin kaydıdır. "Özet" başlığından sonrası ilk denetimi anlatır ve değiştirilmedi.
 
-## Düzeltme durumu
+## Düzeltme sonrası
 
-- Düzeltildi ve Chrome'da klavye ile doğrulandı: A1, A2, A3, B1, B2, B3, B4.
-- Düzeltildi, görerek kontrol edildi: D1, D2, D3, D4, D5, D7, sayfa başlığı ve etiket aralığı (D8).
-- Açık, NVDA gerekiyor: B5.
-- Açık, yapılmadı: D6 (`aria-invalid`), teklif süresi uyarısı ve duyuru sırası (D8).
-- Denetim düzeltmelerden sonra yeniden çalıştırılmadı. axe sonucu eski kod içindir.
+Tarih: 2026-11-01. Denetim düzeltmelerden sonraki kodla, aynı araçlarla yeniden çalıştırıldı: Playwright 1.64.1, axe-core 4.14.0, Chrome, aynı axe etiketleri. Canlı akış yerel sahte API ile ölçüldü. Gerçek NVDA ile test yapılmadı.
+
+### axe sonucu
+
+20 taramada 0 ihlal. Tarananlar açık tema, koyu tema, zorunlu renkler ve azaltılmış harekette başlangıç, Gelişmiş açık, deneme teklifi, alan hatası ve canlı Onayla durumlarıdır. Koyu temada `color-contrast` için gelen "emin değilim" notları ilk denetimdeki yanlış alarmdır: axe zemini beyaz sanıyor, ekrandan okunan zemin `rgb(18, 18, 18)`. Yeni öğelerin gerçek oranı açık temada 21:1, koyu temada 18,73:1.
+
+### Bulguların durumu
+
+- A1 kapandı. Onayla'dan sonra odak metin kutusunda. Teklif süresi Onayla odaktayken dolduğunda da aynı.
+- A2 kapandı. Esc sonrası odak metin kutusunda, dil değişiminde aynı düğmede. Canlı takipte durum değişince liste 0 kez yeniden çizildi.
+- A3 kapandı. Canlı modda sayfada deneme metni yok, Alt+H gerçek para uyarısıyla başlıyor.
+- B1 kapandı. Esc başka alandayken metni silmiyor, metin kutusundayken siliyor.
+- B2 kapandı. Canlı mod ve mikrofon metin olarak ve çift çerçeveyle belli.
+- B3 kapandı. `tr-TR` Türkçe, `en-US` ve `de-DE` İngilizce açılıyor. Dil seçimi Gelişmiş dışında.
+- B4 kapandı. Dil değişimi iki dilde de duyuruluyor.
+- B5 açık. Olası sorun, yalnızca NVDA gösterebilir. Odak metin kutusuna geçiyor ve 129 karakterlik açıklama teklifle yarışabilir.
+- D1 kapandı. Bekleme halinde kesik çerçeve ve bekleme imleci var.
+- D2 kapandı. Kısayollar görünür.
+- D3 kapandı. Odak çerçevesi açık temada 7,5:1, koyu temada 8,97:1. Zorunlu renklerde sistem rengi kullanılıyor.
+- D4 kapandı. İki seçenekte de `lang` var.
+- D5 kısmen açık. `noscript` notu var, ama JavaScript kapalıyken etiketler ve 2 düğme boş kalıyor.
+- D6 kapandı. Hatalı alan `aria-invalid` alıyor, odak oraya gidiyor, yazınca işaret kalkıyor. Miktar, iki token alanı ve metin kutusu denendi.
+- D7 kapandı. `maxlength` kaldırıldı, uzun cümle sunucudan okunuyor.
+- D8 büyük ölçüde kapandı. Sayfa başlığı ve etiket aralığı düzeltildi. Süre uyarısı eklendi: deneme ve canlıda 30 saniye kala bir kez, süre dolunca bir kez duyuruluyor, cevap verilince iptal oluyor. Duyuru sırası (iki duyuru 100 milisaniye içinde gelirse biri kaybolur) açık.
+
+### Yeni sorunlar
+
+Yüksek ya da orta önemli yeni sorun çıkmadı.
+
+- Y1, düşük, açık: Kısayollar artık hem görünür hem `aria-describedby` ile bağlı. Gözden geçirme kipinde NVDA aynı metni iki kez okuyabilir. NVDA ile doğrulanmalı.
+
+### Değişmeyenler
+
+Sekme sırası görsel sırayla aynı, yeni dil seçimi Gönder'den sonra geliyor. 320 ve 640 piksel genişlikte yatay kaydırma yok. Metin aralığında kesilen öğe yok. En küçük hedef 544x27 piksel. Alt+R çalışıyor. Sayfa hatası yok.
+
+Bu rapor uygunluk belgesi değildir. NVDA, gerçek kontrast teması, Firefox, Edge ve mobil test edilmedi.
 
 ## Özet
 

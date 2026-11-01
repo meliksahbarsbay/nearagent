@@ -26,6 +26,8 @@ Swap interfaces are visual: charts, popups, and icon-only buttons. A blind user 
 - Voice input through the browser's Web Speech API. It uses Turkish or English to match the page, announces `Dinliyorum` and `Anladım: ...`, and writes what it heard into the text box. It never sends by itself: you check the text and press Enter.
 - An Advanced section keeps a field-based form, `POST /api/quote`, which works with no keys.
 - Dry mode by default. A dry confirmation only replies `Deneme modu: işlem yapılmadı.`
+- A quote warns once, 30 seconds before it expires, and says so again when it has. Dry quotes last 10 minutes, and live quotes last 2.
+- A form error marks the field with `aria-invalid` and moves focus there. Typing clears the mark.
 - Amounts as people say them, read in code: `yarım SOL`, `bir buçuk NEAR`, `half a SOL`, `one and a half`, `1.000`, and `1,5`. Dollars work too: `50 dolarlık SOL al` and `fifty dollars of SOL`.
 - `son işlemlerimi oku` or `read my recent trades` reads the last 5 confirmed trades, dry and live, with date, what was given and received, and status. Long identifiers stay out of the sentence, and each trade has a copy button.
 - Agent commands, typed or spoken: `cüzdanımda ne var`, `politikamı oku`, `bütçem ne kadar kaldı`, `ajanı dondur`, and `ajanı çöz`, or `what's my balance`, `read my policy`, `how much budget is left`, `freeze the agent`, and `unfreeze the agent`. With no agent they reply `Ajan cüzdanı kurulmadı`. The wallet is read token by token, with dollar values.
@@ -56,6 +58,8 @@ An unknown result is never sent again under a new key. The page says so and tell
 The app's limits sit on top of the owner's signed policy. `MAX_LIVE_USD` caps one swap, with a default of 5. `MAX_LIVE_DAILY_USD` caps the last 24 hours, with a default of 10. The total is stored in `data/live_spend.json`, so a restart cannot reset it. A swap stays counted unless it is proven that nothing was sent, so a refund still counts. If that file cannot be read, live swaps stop.
 
 ### Funding
+
+`docs/funding.md` has the full numbered steps in Turkish. The order matters: NEAR first, because the owner account must exist before it signs, and USDC last, because the deposit address exists only after the agent does. The app has no withdraw command yet, so funds cannot be sent back from the agent through it.
 
 Funding uses real money and needs two transfers, about 0.1 NEAR and about 10 USDC:
 
@@ -180,7 +184,7 @@ NEAR AI Cloud has not been measured on this set yet.
 - The docs give no per-transaction link form. The default is `https://nearblocks.io/txns/{hash}`, which `EXPLORER_TX_URL` can change. With no transaction hash, the copy button holds the intent hash.
 - Live swaps do not check the token list of 1Click: the agent's own token list is used.
 - Trade history is off in the public demo, because a shared server would read one visitor's trades to another.
-- The accessibility audit in `docs/accessibility-audit.md` found no problem that axe detected, and listed manual findings. All high and medium ones are fixed except B5, which needs NVDA. It is not a conformance claim.
+- The accessibility audit in `docs/accessibility-audit.md` was run again after the fixes, with 0 axe violations in 20 scans. High and medium findings are closed except B5, which needs NVDA. It is not a conformance claim.
 
 ## NVDA ile doğrulanacaklar
 
@@ -189,6 +193,7 @@ Not yet checked with NVDA:
 - [ ] Esc: NVDA may use the first press to leave focus mode, so cancelling may take two presses.
 - [ ] Focus after a copy button: Enter copies again until focus returns to the text box. Check that this is clear in use.
 - [ ] Focus after the form: moving to the text box reads its label and shortcuts. Check that this does not delay or cut the quote that follows.
+- [ ] Shortcuts: they are visible and also linked to the text box, so browse mode may read them twice.
 - [ ] Spoken replies: check that each `aria-live` reply is read aloud in full, including a repeat with Alt+R.
 - [ ] Microphone: check that speakers do not feed NVDA's voice into recognition. Headphones may be needed.
 
