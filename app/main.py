@@ -25,7 +25,13 @@ from app.agent_api import (  # noqa: E402
 from app.amounts import number_or_same, read_answer  # noqa: E402
 from app.commands import detect_command  # noqa: E402
 from app.history import history  # noqa: E402
-from app.live import QUOTE_MINUTES, execute_order, prepare_order, read_operation  # noqa: E402
+from app.live import (  # noqa: E402
+    QUOTE_MINUTES,
+    QUOTE_SECONDS,
+    execute_order,
+    prepare_order,
+    read_operation,
+)
 from app.confirm import (  # noqa: E402
     Pending,
     PendingStore,
@@ -59,6 +65,7 @@ from app.owner import (  # noqa: E402
     owner_ready,
 )
 from app.oneclick import (  # noqa: E402
+    QUOTE_TTL_MINUTES,
     OneClick,
     QuoteError,
     build_quote_request,
@@ -73,6 +80,7 @@ MAX_TOKEN_TEXT = 64
 MAX_SENTENCE = 300
 LARGE_USD = Decimal(100)
 MAX_CODE_ATTEMPTS = 3
+TEXT_ERRORS = {"empty_text", "too_long"}
 RECENT_TRADES = 5
 UNFREEZE_COOLDOWN_MINUTES = 10
 ALREADY_DONE = {
@@ -114,7 +122,9 @@ def get_oneclick() -> OneClick:
     return oneclick
 
 
-def error_response(error: QuoteError, lang: str, pending: str | None = None) -> JSONResponse:
+def error_response(
+    error: QuoteError, lang: str, pending: str | None = None, field: str | None = None
+) -> JSONResponse:
     content = {
         "error": error.code,
         "language": lang,
@@ -122,7 +132,23 @@ def error_response(error: QuoteError, lang: str, pending: str | None = None) -> 
     }
     if pending:
         content["pending"] = pending
+    if field:
+        content["field"] = field
     return JSONResponse(status_code=error.status, content=content)
+
+
+def form_field(error: QuoteError, data: "QuoteInput") -> str | None:
+    """Which form field an error is about, so the page can mark it and move there."""
+    if error.code == "invalid_amount":
+        return "amount"
+    if error.code == "same_token":
+        return "to_token"
+    if error.code == "missing_token":
+        return "from_token" if not data.from_token.strip() else "to_token"
+    if error.code in ("unknown_token", "token_not_on_chain"):
+        wanted = error.details.get("symbol", "").strip().upper()
+        return "to_token" if wanted == data.to_token.strip().upper() else "from_token"
+    return None
 
 
 def reply(action: str, key: str, lang: str, pending: str | None = None) -> dict:
@@ -190,7 +216,8 @@ async def offer_live(
         "action": "swap",
         "mode": "live",
         "language": lang,
-        "pending": pendings.add(kind, lang, live=True, order=order),
+        "pending": pendings.add(kind, lang, live=True, order=order, seconds=QUOTE_SECONDS),
+        "expires_in": QUOTE_SECONDS,
         "confirm_button": True,
         "spoken": f"{terms}{warning}{say_assumed(assumed, lang)} {question}",
         "quote": {"from": origin["assetId"], "to": destination["assetId"]},
@@ -265,6 +292,7 @@ async def run_swap(
         "mode": "dry",
         "language": lang,
         "pending": pendings.add(kind, lang, summary=summary),
+        "expires_in": QUOTE_TTL_MINUTES * 60,
         "confirm_button": False,
         "spoken": f"{terms}{say_assumed(assumed, lang)} {question}",
         "quote": {
@@ -506,7 +534,7 @@ async def ask(data: AskInput, client: OneClick = Depends(get_oneclick)):
         lang = intent.language
         return await run_intent(client, intent, data.live)
     except QuoteError as error:
-        return error_response(error, lang)
+        return error_response(error, lang, field="text" if error.code in TEXT_ERRORS else None)
 
 
 @app.post("/api/quote")
@@ -518,7 +546,7 @@ async def quote(data: QuoteInput, client: OneClick = Depends(get_oneclick)):
             client, data.from_token, None, data.to_token, None, amount, data.lang, data.live
         )
     except QuoteError as error:
-        return error_response(error, data.lang)
+        return error_response(error, data.lang, field=form_field(error, data))
 
 
 @app.post("/api/live/status")

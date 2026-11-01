@@ -8,6 +8,8 @@ const TEXT = {
     modeLive: "Mod: Canlı, gerçek para",
     micOn: "Mikrofon açık, dinliyorum.",
     languageSet: "Dil Türkçe oldu.",
+    quoteExpiring: "Teklifin süresi 30 saniye içinde doluyor.",
+    quoteExpired: "Teklifin süresi doldu, yeni teklif için tekrar söyle.",
     title: "nearagent: erişilebilir kripto asistanı",
     sentence: "Ne yapmak istiyorsun?",
     send: "Gönder",
@@ -64,6 +66,8 @@ const TEXT = {
     modeLive: "Mode: Live, real money",
     micOn: "Microphone on, listening.",
     languageSet: "Language set to English.",
+    quoteExpiring: "This quote expires within 30 seconds.",
+    quoteExpired: "This quote has expired. Say your request again for a new quote.",
     title: "nearagent: an accessible crypto assistant",
     sentence: "What do you want to do?",
     send: "Send",
@@ -117,6 +121,8 @@ const TEXT = {
 
 const ANNOUNCE_DELAY_MS = 100;
 const POLL_MS = 2000;
+const EXPIRY_NOTICE_SECONDS = 30;
+const FIELD_IDS = { text: "sentence", amount: "amount", from_token: "from-token", to_token: "to-token" };
 const MAX_POLLS = 300;
 const SPEECH_LOCALES = { tr: "tr-TR", en: "en-US" };
 const VOICE_ERRORS = {
@@ -137,6 +143,7 @@ let pending = null;
 let lastReply = "";
 let lastIds = [];
 let drawnIds = "";
+let quoteTimers = [];
 let announceTimer = 0;
 let liveMode = false;
 let listening = null;
@@ -281,9 +288,57 @@ async function followSwap(track) {
   announce(lastReply);
 }
 
+function clearQuoteTimers() {
+  quoteTimers.forEach((timer) => window.clearTimeout(timer));
+  quoteTimers = [];
+}
+
+function say(message) {
+  lastReply = message;
+  announce(message);
+}
+
+function quoteExpired() {
+  // A reply on its way decides for itself, and an answer in flight must not be cut.
+  if (controller) return;
+  pending = null;
+  const confirmButton = byId("confirm");
+  if (document.activeElement === confirmButton) sentence.focus();
+  confirmButton.hidden = true;
+  lastIds = [];
+  renderIds();
+  say(TEXT[language].quoteExpired);
+}
+
+// Each notice fires once, and any later reply without this quote cancels both.
+function startQuoteTimers(seconds) {
+  clearQuoteTimers();
+  const noticeAt = seconds - EXPIRY_NOTICE_SECONDS;
+  if (noticeAt > 0) {
+    quoteTimers.push(
+      window.setTimeout(() => {
+        if (!controller) say(TEXT[language].quoteExpiring);
+      }, noticeAt * 1000)
+    );
+  }
+  quoteTimers.push(window.setTimeout(quoteExpired, seconds * 1000));
+}
+
+function clearFieldErrors() {
+  Object.values(FIELD_IDS).forEach((id) => byId(id).removeAttribute("aria-invalid"));
+}
+
+function markField(name) {
+  const field = byId(FIELD_IDS[name]);
+  if (!field) return;
+  field.setAttribute("aria-invalid", "true");
+  field.focus();
+}
+
 async function send(path, body, button) {
   if (controller) return;
   controller = new AbortController();
+  clearFieldErrors();
   // The button stays enabled so keyboard focus is never lost.
   button.setAttribute("aria-disabled", "true");
   announce(TEXT[language].busy);
@@ -296,6 +351,8 @@ async function send(path, body, button) {
     });
     const data = await response.json();
     pending = data.pending || null;
+    if (data.expires_in) startQuoteTimers(data.expires_in);
+    else if (!pending) clearQuoteTimers();
     const confirmButton = byId("confirm");
     const confirmHadFocus = document.activeElement === confirmButton;
     confirmButton.hidden = !data.confirm_button;
@@ -306,6 +363,7 @@ async function send(path, body, button) {
     if (response.ok || pending) sentence.value = "";
     // Answers go in the text box, so a question from the form moves focus there.
     if (pending) sentence.focus();
+    if (data.field) markField(data.field);
     lastReply = data.spoken || TEXT[language].failed;
     announce(lastReply);
     if (data.track) followSwap(data.track);
@@ -434,6 +492,11 @@ byId("quote-form").addEventListener("submit", (event) => {
 byId("mic").addEventListener("click", toggleListening);
 byId("confirm").addEventListener("click", () => ask("evet"));
 byId("live-toggle").addEventListener("click", () => setLiveMode(!liveMode));
+
+// Typing again is the fix, so the error mark goes with it.
+Object.values(FIELD_IDS).forEach((id) => {
+  byId(id).addEventListener("input", () => byId(id).removeAttribute("aria-invalid"));
+});
 
 // A held Enter key must not send a request and then confirm the reply.
 sentence.addEventListener("keydown", (event) => {

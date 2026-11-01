@@ -67,6 +67,7 @@ class PendingStore:
         code: str = "",
         order: Any = None,
         summary: dict | None = None,
+        seconds: int = QUOTE_TTL_MINUTES * 60,
     ) -> str:
         now = time.monotonic()
         self._items = {k: v for k, v in self._items.items() if v.expires_at > now}
@@ -74,7 +75,7 @@ class PendingStore:
         if len(self._items) >= MAX_OPEN:
             del self._items[next(iter(self._items))]
         key = secrets.token_urlsafe(16)
-        expires_at = now + QUOTE_TTL_MINUTES * 60
+        expires_at = now + seconds
         self._items[key] = Pending(kind, lang, swap or {}, expires_at, live, code, order=order, summary=summary or {})
         return key
 

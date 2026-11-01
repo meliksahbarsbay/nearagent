@@ -738,3 +738,14 @@ def test_help_stays_calm_in_dry_mode(no_live, monkeypatch):
     use_intent(monkeypatch, action="help")
     data = client.post("/api/ask", json={"text": "x"}).json()
     assert "para hareket etmez" in data["spoken"]
+
+
+def test_live_quote_expires_with_its_two_minutes(agent):
+    client, _ = make_client()
+    data = offer(client)
+    assert data["expires_in"] == live.QUOTE_SECONDS
+    remaining = main.pendings.get(data["pending"]).expires_at - time.monotonic()
+    assert remaining <= live.QUOTE_SECONDS
+    main.pendings.get(data["pending"]).expires_at = 0
+    assert answer(client, data["pending"], "evet")["action"] == "expired"
+    assert agent.live_swaps() == []

@@ -399,3 +399,34 @@ def test_language_choice_is_outside_the_advanced_section():
     assert 'id="mode-state"' in page
     assert 'id="mic-state"' in page
     assert 'button[aria-pressed="true"]' in page
+
+
+@pytest.mark.parametrize(
+    "changes, field",
+    [
+        ({"amount": "abc"}, "amount"),
+        ({"from_token": ""}, "from_token"),
+        ({"to_token": ""}, "to_token"),
+        ({"to_token": "wNEAR"}, "to_token"),
+        ({"from_token": "NOPE"}, "from_token"),
+        ({"to_token": "NOPE"}, "to_token"),
+    ],
+)
+def test_form_errors_name_their_field(changes, field):
+    client, _ = make_client()
+    assert client.post("/api/quote", json=payload(**changes)).json()["field"] == field
+
+
+def test_upstream_failure_names_no_field():
+    client, _ = make_client(quote_status=400)
+    assert "field" not in client.post("/api/quote", json=payload()).json()
+
+
+def test_sentence_errors_point_at_the_text_box():
+    client, _ = make_client()
+    assert client.post("/api/ask", json={"text": " "}).json()["field"] == "text"
+
+
+def test_dry_quote_says_when_it_expires():
+    client, _ = make_client()
+    assert client.post("/api/quote", json=payload()).json()["expires_in"] == 600
