@@ -44,13 +44,23 @@ test("an empty result is empty text", () => {
   assert.equal(voice.readResult(result()).text, "");
 });
 
-test("silence cancels live money, and never confirms it", () => {
-  assert.equal(voice.onSilence({ livePending: true, silences: 1 }), "cancel");
+test("eight seconds of silence cancel live money, and never confirm it", () => {
+  assert.equal(voice.onSilence({ livePending: true, quietMs: 7999 }), "listen");
+  assert.equal(voice.onSilence({ livePending: true, quietMs: 8000 }), "cancel");
 });
 
-test("silence without live money listens again, then stops", () => {
-  assert.equal(voice.onSilence({ livePending: false, silences: 1 }), "listen");
-  assert.equal(voice.onSilence({ livePending: false, silences: voice.MAX_SILENCES }), "stop");
+test("a browser that ends sessions early does not count as long silence", () => {
+  // Three sessions that ended almost at once, as while the permission prompt is open.
+  for (const quietMs of [50, 120, 400, 5000]) {
+    assert.equal(voice.onSilence({ livePending: false, quietMs, first: true }), "listen");
+  }
+});
+
+test("voice mode waits at least fifteen seconds before it turns itself off", () => {
+  assert.ok(voice.silenceLimit({ livePending: false, first: true }) >= 15000);
+  assert.equal(voice.onSilence({ livePending: false, quietMs: 14999, first: true }), "listen");
+  assert.equal(voice.onSilence({ livePending: false, quietMs: voice.IDLE_MS, first: false }), "stop");
+  assert.equal(voice.onSilence({ livePending: false, quietMs: voice.IDLE_MS - 1, first: false }), "listen");
 });
 
 test("a local voice in the page language is preferred", () => {

@@ -3,9 +3,12 @@
 // Voice mode: listen, send, speak the reply, and listen again.
 // The pure helpers at the top are tested with node --test. The loop below needs a browser.
 
+// Silence is measured in time, not in sessions: a browser may end a silent session at once,
+// for example while the microphone permission is still being asked.
 const SILENCE_MS = 8000;
+const FIRST_IDLE_MS = 15000;
+const IDLE_MS = 30000;
 const RELISTEN_MS = 400;
-const MAX_SILENCES = 3;
 const ALTERNATIVES = 3;
 const FOLD = { ı: "i", İ: "i", ç: "c", Ç: "c", ğ: "g", Ğ: "g", ö: "o", Ö: "o", ş: "s", Ş: "s", ü: "u", Ü: "u" };
 const EXIT_PHRASES = [
@@ -46,11 +49,17 @@ function readResult(result) {
   };
 }
 
+// How long silence may last before it counts. Live money waits 8 seconds. Voice mode itself
+// waits 30 seconds, and never less than 15 seconds after it is turned on.
+function silenceLimit({ livePending, first }) {
+  if (livePending) return SILENCE_MS;
+  return first ? Math.max(FIRST_IDLE_MS, IDLE_MS) : IDLE_MS;
+}
+
 // What silence means. Live money waiting for an answer is cancelled, never confirmed.
-function onSilence({ livePending, silences }) {
-  if (livePending) return "cancel";
-  if (silences >= MAX_SILENCES) return "stop";
-  return "listen";
+function onSilence({ livePending, quietMs, first = false }) {
+  if (quietMs < silenceLimit({ livePending, first })) return "listen";
+  return livePending ? "cancel" : "stop";
 }
 
 function pickVoice(voices, lang) {
@@ -59,7 +68,18 @@ function pickVoice(voices, lang) {
   return matching.find((voice) => voice.localService) || matching[0] || null;
 }
 
-const helpers = { fold, isExitPhrase, readResult, onSilence, pickVoice, SILENCE_MS, ALTERNATIVES, MAX_SILENCES };
+const helpers = {
+  fold,
+  isExitPhrase,
+  readResult,
+  onSilence,
+  silenceLimit,
+  pickVoice,
+  SILENCE_MS,
+  FIRST_IDLE_MS,
+  IDLE_MS,
+  ALTERNATIVES,
+};
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = helpers;
@@ -73,7 +93,9 @@ function createVoiceMode(hooks) {
   let session = null;
   let silenceTimer = 0;
   let relistenTimer = 0;
-  let silences = 0;
+  // When the current quiet began, and whether nothing has been heard since voice mode began.
+  let quietSince = 0;
+  let first = true;
 
   function supported() {
     return Boolean(Recognition && synth && window.SpeechSynthesisUtterance);
@@ -95,13 +117,22 @@ function createVoiceMode(hooks) {
     hooks.showListening(false);
   }
 
+  function quietMs() {
+    return quietSince ? Date.now() - quietSince : 0;
+  }
+
   function heardNothing() {
     stopListening();
-    silences += 1;
-    const step = onSilence({ livePending: hooks.livePending(), silences });
-    if (step === "cancel") hooks.sendVoice({ text: "", confidence: null, alternatives: [] });
-    else if (step === "stop") hooks.stopped("voiceIdle");
-    else listen();
+    const step = onSilence({ livePending: hooks.livePending(), quietMs: quietMs(), first });
+    if (step === "cancel") {
+      quietSince = 0;
+      hooks.sendVoice({ text: "", confidence: null, alternatives: [] });
+    } else if (step === "stop") {
+      hooks.stopped("voiceIdle");
+    } else {
+      // A session that ended early just starts again, after a short pause.
+      listenSoon();
+    }
   }
 
   function listen() {
@@ -120,7 +151,8 @@ function createVoiceMode(hooks) {
         heardNothing();
         return;
       }
-      silences = 0;
+      quietSince = 0;
+      first = false;
       if (isExitPhrase(result.text)) {
         hooks.stopped("voiceOff");
         return;
@@ -148,10 +180,12 @@ function createVoiceMode(hooks) {
       return;
     }
     hooks.showListening(true);
+    if (!quietSince) quietSince = Date.now();
     // Browsers end a silent session at different times, so the app keeps its own clock.
+    const limit = silenceLimit({ livePending: hooks.livePending(), first });
     silenceTimer = window.setTimeout(() => {
       if (session === current) heardNothing();
-    }, SILENCE_MS);
+    }, Math.max(1000, limit - quietMs()));
   }
 
   function listenSoon() {
@@ -163,6 +197,8 @@ function createVoiceMode(hooks) {
   function speak(message) {
     if (!on || !message) return;
     stopListening();
+    // A reply starts a new quiet, counted from when the microphone opens again.
+    quietSince = 0;
     const utterance = new SpeechSynthesisUtterance(message);
     utterance.lang = hooks.locale();
     const voice = pickVoice(synth.getVoices(), utterance.lang);
@@ -175,7 +211,8 @@ function createVoiceMode(hooks) {
 
   function start(greeting) {
     on = true;
-    silences = 0;
+    quietSince = 0;
+    first = true;
     speak(greeting);
   }
 
