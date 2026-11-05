@@ -46,15 +46,15 @@ Başka alan ekleme. Özellikle `website` alanı dolu giderse başvuru spam sayı
 Her track için dürüst değerlendirmem:
 
 - `open`: uyuyor. Erişilebilirlik başka bir kategoriye tam oturmuyor.
-- `security`: uyuyor. Politika okuma, bütçe sınırı ve tek adımda dondurma bu track'in konusu. Ama gerçek Agent API ile henüz denenmedi, yalnızca sahte API ile test edildi.
-- `agents`: zayıf. Bu track kazanan, harcayan ve pazarlık eden ajanlar istiyor. Bizim ajanımızın takas ve çekim kodu var, ama gerçek ağda hiç işlem yapmadı.
-- `realworld`: zayıf. Bu track maaş, fatura ve ödeme gibi bir şirketin yarın kullanacağı şeyler istiyor. Bizde kod hazır, ama yalnızca deneme modu gerçek serviste çalıştı.
+- `security`: uyuyor. Politika okuma, bütçe sınırı ve tek adımda dondurma bu track'in konusu. Dondurma ve çözme gerçek Agent API'de bir kez çalıştı. Çekim yalnızca sahte API ile test edildi.
+- `agents`: zayıf. Bu track kazanan, harcayan ve pazarlık eden ajanlar istiyor. Bizim ajanımız gerçek ağda bir takas yaptı, ama kendi başına karar vermiyor, her işlemi sahibi onaylıyor.
+- `realworld`: zayıf. Bu track maaş, fatura ve ödeme gibi bir şirketin yarın kullanacağı şeyler istiyor. Gerçek ağda bir takas yapıldı, ama maaş ya da fatura gibi bir kullanım yok.
 - `privacy`: şimdilik ekleme. Kod NEAR AI Cloud'u önce deniyor, ama `.env` içinde NEAR AI anahtarı yok, cümleler şu an OpenAI'a gidiyor. Anahtarı ekleyip test setini NEAR AI ile de çalıştırırsan ekle. Kredi için https://cloud.near.ai adresine bak. NEAR Builders'a katılınca 10 dolar kredi veriliyor.
-- `defi`: istemediğin ama düşünmeye değer bir seçenek. NEAR Intents üzerinden takas teklifi verdiği için `agents` ve `realworld`'den daha yakın. Ama bu track de çalışan takas bekliyor, bizim canlı takasımız gerçek ağda denenmedi.
+- `defi`: istemediğin ama düşünmeye değer bir seçenek. NEAR Intents üzerinden takas teklifi verdiği için `agents` ve `realworld`'den daha yakın. Bu track çalışan takas bekliyor. Gerçek ağda bir takas yapıldı, 4,9 USDC'den 1,207 wNEAR'a. Tek bir takas olduğunu unutma.
 
 ## idea
 
-Metin 1593 karakter. Sınır 20 ile 2000 arası.
+Metin 1753 karakter. Sınır 20 ile 2000 arası.
 
 Swap interfaces are visual: charts, popups, and icon-only buttons. A blind user on a screen reader often cannot tell what a swap will cost or what they will receive.
 
@@ -62,10 +62,10 @@ nearagent is an accessibility-first crypto assistant for NEAR Intents. It has on
 
 How NEAR fits in: NEAR Intents 1Click supplies token data, prices, and quotes in dry mode, so one sentence can price a swap across chains with no bridge screens. The NEAR Intents Agent API is built in for a policy-bound wallet: live swaps, withdrawals only to the owner's address, a daily budget, freezing in one step, and unfreezing only with a six digit code. A separate script sends NEAR from the owner account. The parser is built to try NEAR AI Cloud first, with OpenAI as the fallback.
 
-Current status: dry mode is the default and works with the real 1Click API. Live swaps, withdrawals, freezing, and the NEAR send script are built, but they have only been tested against a local stand-in API and a fake RPC. None has run on a real network, and no agent is funded yet. Parsing has been measured with OpenAI only, on a test set that also shaped the prompt.
+Current status: dry mode is the default and works with the real 1Click API. On NEAR mainnet, through the Agent API's demo server, an agent was created, funded with 5 USDC, frozen and unfrozen. On 5 November it made one real swap, 4.9 USDC to 1.207 wNEAR, confirmed from the page with the NVDA screen reader. Proof links are in the README. Withdrawals and the NEAR send script have only been tested against a local stand-in API and a fake RPC. Parsing has been measured with OpenAI only, on a test set that also shaped the prompt.
 
 ## idea metnini ne zaman değiştirmelisin
 
-- Ajanı kurup fonlarsan son paragraftaki ajan cümlesini güncelle.
+- Gerçek ağda çekim ya da NEAR gönderimi yaparsan son paragrafı güncelle.
 - NEAR AI Cloud'u ölçersen son cümleyi güncelle ve `privacy` track'ini ekle.
 - Gerçek ağda bir takas, çekim ya da dondurma yaparsan yalnızca gerçekten denediğini yaz. Denenmeyeni denenmiş gösterme.

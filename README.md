@@ -38,11 +38,11 @@ Swap interfaces are visual: charts, popups, and icon-only buttons. A blind user 
 - A live mode switch in the Advanced section. It stays off with the reply `Canlı mod için ajan cüzdanı kurulmadı` unless `LIVE_ENABLED=true` and the Agent API key, `AGENT_ID`, and `GRANT_TOKEN` are all set.
 - In live mode, Enter alone never confirms. You must type `evet` or `yes`, or press a separate Confirm button.
 
-## Live mode: off until funded
+## Live mode: off by default
 
-Live mode is off, and it stays off until the agent is funded. No agent exists yet, no real funds are held, and nothing here has run against NEAR mainnet. Live swaps have only been tested against a local stand-in for the Agent API.
+Live mode is off by default. An agent was created on NEAR mainnet through the Agent API's demo server and funded with 5 USDC. Freezing and unfreezing ran once on it. On 5 November 2026, one real swap, 4.9 USDC to 1.207098 wNEAR, was confirmed from the page with the NVDA screen reader. The proof links are under `Known limits`. That is the only real swap so far. Withdrawals and the NEAR send script have not run on mainnet yet.
 
-The first real swap needs the owner's explicit approval, once funds arrive. It is mainnet only, with real money, in a dedicated account.
+Every real swap needs the owner's explicit approval. It is mainnet only, with real money, in a dedicated account.
 
 ### How a live swap works
 
@@ -181,7 +181,7 @@ NEAR AI Cloud has not been measured on this set yet.
 - A sentence that buys without saying how to pay uses USDC, and the quote says so.
 - Dollar amounts use the token's current list price, so the real value can differ slightly. In dry mode a bought amount uses `EXACT_OUTPUT`. The Agent API takes an exact input only, so in live mode every amount becomes the input that matches it at the current price.
 - Trade history is stored in `data/history.json` on this computer. It is a convenience, and the Agent API holds the real record of a live swap. A swap still running when the app restarts stays marked as processing.
-- Reading the wallet was tested against a stand-in, not the real Agent API.
+- Reading the wallet works against the real Agent API from the terminal, with `python scripts/owner_setup.py balance`. The page's wallet reply was tested against a stand-in.
 - Some quotes fail upstream with no specific reason, for example when the amount is too low. The app then gives a general spoken message.
 - Prices come from the 1Click token list, so they may be a few minutes old.
 - Sending to a person or a wallet address is not supported. Those sentences get the help reply.
@@ -195,7 +195,7 @@ NEAR AI Cloud has not been measured on this set yet.
 - Privacy in voice mode: your voice goes to the browser's speech service, which is Google's in Chrome and Microsoft's in Edge. nearagent's server never receives audio, only the recognized text. Replies are spoken by the browser's own voices, and Turkish needs a Turkish voice installed in the system.
 - Voice input follows the page language, so an English sentence on a Turkish page may be misheard. Change the language menu below the text box first.
 - Owner signing runs from a key in `.env`, not a wallet. Keep only a small amount in a dedicated owner account.
-- Freezing and unfreezing were tested with the real signer against a local stand-in API, not the real Agent API. Real timing will be slower. If the result takes more than about 30 seconds, the page says it is not known yet and never claims success.
+- Freezing and unfreezing ran once on the real Agent API, on 5 November 2026. Before that they were tested with the real signer against a local stand-in API. If the result takes more than about 30 seconds, the page says it is not known yet and never claims success.
 - Outside voice mode, a spoken `ajanı dondur` still needs Enter, because the microphone button never sends by itself. In voice mode it is sent at once.
 - The Agent API documents the live quote's `quote` object only loosely. The app reads `amount_out`, `min_amount_out`, and `time_estimate`. Only `amount_out` is named in the docs, so these need checking on the first real quote. If `amount_out` is missing, nothing is sent. If the minimum is missing, the app uses 1% below the quote.
 - The Agent API gave no transaction hash for the first real swap, only an intent hash that no explorer opens. After a live operation, the Identifiers section lists what it has, most specific first: a transaction link on nearblocks when there is a hash, the swap on the NEAR Intents explorer when a 1Click deposit address is known, the agent's token movements on nearblocks, and the intent hash as `Kayıt kimliği` (`Record ID`). Each link has a copy button and an `Open in explorer` link that opens a new tab. `EXPLORER_TX_URL`, `EXPLORER_INTENTS_URL`, and `EXPLORER_ACCOUNT_URL` change the link forms.

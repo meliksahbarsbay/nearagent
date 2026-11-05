@@ -20,7 +20,7 @@ Herkese açık demo yoksa bu video zorunlu hale gelir. Hakemler demoyu açamıyo
 
 ## Çekimden önce
 
-- Sahne 3 şu an çekilemez. Bu projede ajan kurulu değil, `.env` içinde yalnızca `OPENAI_API_KEY` var. Komut bugün `Ajan cüzdanı kurulmadı` der. Önce `docs/funding.md` adımlarını bitir. Bu adımlar gerçek para ister: 0,1 NEAR ve 5 USDC.
+- Sahne 3 artık çekilebilir. Ajan mainnet'te kurulu ve fonlandı, dondurma ve çözme bir kez denendi. Çekimden önce `python scripts/owner_setup.py balance` ile bakiyeye bak.
 - Sahne 3'ü lokalde çek: `python -m uvicorn app.main:app --host 127.0.0.1 --port 8000`. Herkese açık adres ajan komutlarını çalıştırmaz.
 - Sahneler 1 ve 2 için de aynı lokal uygulamayı kullan. Böylece tek seferde çekilir.
 - Fiyatlar değişir. Aşağıdaki `...` yerleri kayıtta gerçek değerle dolar.
