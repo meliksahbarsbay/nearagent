@@ -23,13 +23,8 @@ from decimal import Decimal, InvalidOperation
 import httpx
 
 from app.amounts import find_amount, first_number, tokenize
-from app.intent import (
-    DEFAULT_NEAR_AI_BASE_URL,
-    DEFAULT_NEAR_AI_MODEL,
-    DEFAULT_OPENAI_BASE_URL,
-    DEFAULT_OPENAI_MODEL,
-    Provider,
-)
+from app.intent import DEFAULT_OPENAI_MODEL
+from app.providers import Service, chain
 from app.voice_text import normalize_voice
 
 log = logging.getLogger("nearagent.repair")
@@ -43,6 +38,8 @@ if not log.handlers:
 
 MIN_CONFIDENCE = 0.7
 TIMEOUT_SECONDS = 20
+# Listed by NEAR AI Cloud with structured outputs, and run in its TEE. Checked on 5 November 2026.
+DEFAULT_NEAR_AI_REPAIR_MODEL = "z-ai/glm-5.3-flash"
 SUPPORTED_DRY = ("NEAR", "USDC", "USDT", "SOL", "ETH", "BTC")
 # The agent's signed policy allows these.
 SUPPORTED_LIVE = ("NEAR", "USDC", "SOL", "ETH")
@@ -90,26 +87,28 @@ class Repair:
     kind: str
     swap: dict = field(default_factory=dict)
     source: str = "rule"
+    provider: str = "rule"
+    backup: bool = False
 
 
 def supported(live: bool) -> tuple[str, ...]:
     return SUPPORTED_LIVE if live else SUPPORTED_DRY
 
 
-def repair_provider() -> Provider | None:
-    """OpenAI by default. REPAIR_PROVIDER=near_ai uses NEAR AI Cloud, which speaks the same API."""
-    if (os.getenv("REPAIR_PROVIDER") or "openai").strip().lower() in ("near_ai", "nearai", "near"):
-        key = os.getenv("NEAR_AI_API_KEY")
-        if not key:
-            return None
-        base = os.getenv("NEAR_AI_BASE_URL") or DEFAULT_NEAR_AI_BASE_URL
-        model = os.getenv("REPAIR_MODEL") or os.getenv("NEAR_AI_MODEL") or DEFAULT_NEAR_AI_MODEL
-        return Provider("near_ai", base, key, model)
-    key = os.getenv("OPENAI_API_KEY")
-    if not key:
-        return None
-    model = os.getenv("REPAIR_MODEL") or os.getenv("OPENAI_MODEL") or DEFAULT_OPENAI_MODEL
-    return Provider("openai", DEFAULT_OPENAI_BASE_URL, key, model)
+def repair_chain() -> list[Service]:
+    """NEAR AI first when its key is set, OpenAI as the backup. REPAIR_PROVIDER can swap them."""
+    return chain(
+        "REPAIR_PROVIDER",
+        os.getenv("NEARAI_REPAIR_MODEL") or DEFAULT_NEAR_AI_REPAIR_MODEL,
+        os.getenv("REPAIR_MODEL") or os.getenv("OPENAI_MODEL") or DEFAULT_OPENAI_MODEL,
+        TIMEOUT_SECONDS,
+    )
+
+
+def repair_provider() -> Service | None:
+    """The service tried first, or None with no key at all."""
+    services = repair_chain()
+    return services[0] if services else None
 
 
 def with_aliases(text: str, allowed: tuple[str, ...]) -> str:
@@ -162,7 +161,7 @@ def by_rules(text: str, lang: str, allowed: tuple[str, ...]) -> Repair | None:
     return Repair("suggest", {**swap, "amount": amount})
 
 
-async def ask_model(provider: Provider, text: str, allowed: tuple[str, ...]) -> dict:
+async def ask_model(provider: Service, text: str, allowed: tuple[str, ...]) -> dict:
     body = {
         "model": provider.model,
         "messages": [
@@ -175,7 +174,7 @@ async def ask_model(provider: Provider, text: str, allowed: tuple[str, ...]) -> 
         },
     }
     headers = {"Authorization": f"Bearer {provider.api_key}"}
-    async with httpx.AsyncClient(base_url=provider.base_url, timeout=TIMEOUT_SECONDS, transport=transport) as client:
+    async with httpx.AsyncClient(base_url=provider.base_url, timeout=provider.timeout, transport=transport) as client:
         response = await client.post("chat/completions", json=body, headers=headers)
     response.raise_for_status()
     return json.loads(response.json()["choices"][0]["message"]["content"])
@@ -204,24 +203,32 @@ def check(answer: dict, text: str, lang: str, allowed: tuple[str, ...]) -> tuple
 
 
 async def by_model(text: str, lang: str, allowed: tuple[str, ...]) -> Repair | None:
-    provider = repair_provider() if llm_allowed else None
-    if provider is None:
-        return None
-    started = time.monotonic()
-    try:
-        answer = await ask_model(provider, text, allowed)
-    except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError) as error:
+    """The first service that answers decides. An error or 8 quiet seconds hand it to the backup."""
+    services = repair_chain() if llm_allowed else []
+    for index, service in enumerate(services):
+        backup = index > 0
+        started = time.monotonic()
+        try:
+            answer = await ask_model(service, text, allowed)
+        except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError) as error:
+            elapsed = round((time.monotonic() - started) * 1000)
+            log.warning(
+                "repair provider=%s model=%s ms=%d backup=%s failed=%s next=%s",
+                service.name, service.model, elapsed, backup, type(error).__name__,
+                services[index + 1].name if index + 1 < len(services) else "rules",
+            )
+            continue
         elapsed = round((time.monotonic() - started) * 1000)
-        log.warning("repair %s model=%s ms=%d failed=%s", provider.name, provider.model, elapsed, type(error).__name__)
-        return None
-    elapsed = round((time.monotonic() - started) * 1000)
-    repair, outcome = check(answer, text, lang, allowed)
-    log.info(
-        "repair %s model=%s ms=%d outcome=%s from=%s to=%s confidence=%s",
-        provider.name, provider.model, elapsed, outcome,
-        answer.get("from_token"), answer.get("to_token"), answer.get("confidence"),
-    )
-    return repair
+        repair, outcome = check(answer, text, lang, allowed)
+        log.info(
+            "repair provider=%s model=%s ms=%d backup=%s outcome=%s from=%s to=%s confidence=%s",
+            service.name, service.model, elapsed, backup, outcome,
+            answer.get("from_token"), answer.get("to_token"), answer.get("confidence"),
+        )
+        if repair is not None:
+            repair.provider, repair.backup = service.name, backup
+        return repair
+    return None
 
 
 async def suggest(text: str, lang: str, live: bool, use_model: bool = True) -> Repair | None:

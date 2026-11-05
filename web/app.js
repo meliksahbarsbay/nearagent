@@ -38,10 +38,16 @@ const TEXT = {
     voiceIdle: "Uzun süre ses gelmedi, sesli modu kapattım.",
     voiceUnsupported: "Bu tarayıcı sesli modu desteklemiyor, Chrome ya da Edge kullan.",
     stt: "Ses tanıma",
-    sttBrowser: "Tarayıcı, Chrome'da Google",
+    sttBrowser: "Tarayıcı (Google)",
+    sttNearai: "NEAR AI",
     sttOpenai: "OpenAI",
+    recommended: " (önerilen)",
     sttSetBrowser: "Ses tanıma tarayıcıda. Chrome'da ses Google'a gider.",
+    sttSetNearai: "Ses tanıma NEAR AI. Kayıt NEAR AI Cloud'a gider. NEAR AI güven değeri vermez, canlı işlemi yazılı evet ya da Onayla düğmesiyle onaylarsın.",
     sttSetOpenai: "Ses tanıma OpenAI. Kayıt OpenAI'ye gider.",
+    providerLine: "Kullanılan sağlayıcı: {name}",
+    providerBackup: "{name} (yedek)",
+    providerNone: "Kullanılan sağlayıcı: yok. Ses için tarayıcı, düzeltme için kurallar kullanılıyor.",
     recordingStarted: "Kayıt başladı, konuş. Bitince sus.",
     recordingDone: "Kayıt bitti, yazıya çeviriyorum.",
     confirm: "Onayla, gerçek para",
@@ -113,10 +119,16 @@ const TEXT = {
     voiceIdle: "I heard nothing for a while, so I turned voice mode off.",
     voiceUnsupported: "This browser does not support voice mode. Use Chrome or Edge.",
     stt: "Speech recognition",
-    sttBrowser: "Browser, Google in Chrome",
+    sttBrowser: "Browser (Google)",
+    sttNearai: "NEAR AI",
     sttOpenai: "OpenAI",
+    recommended: " (recommended)",
     sttSetBrowser: "Speech recognition is in the browser. In Chrome, audio goes to Google.",
+    sttSetNearai: "Speech recognition is NEAR AI. Recordings go to NEAR AI Cloud. NEAR AI gives no confidence, so you confirm live swaps by typing yes or pressing Confirm.",
     sttSetOpenai: "Speech recognition is OpenAI. Recordings go to OpenAI.",
+    providerLine: "Provider in use: {name}",
+    providerBackup: "{name} (backup)",
+    providerNone: "Provider in use: none. Speech uses the browser, and suggestions use rules.",
     recordingStarted: "Recording. Speak, then stop talking.",
     recordingDone: "Recording done, turning it into text.",
     confirm: "Confirm, real money",
@@ -184,21 +196,27 @@ let listening = null;
 let pendingLive = false;
 // What the microphone last wrote into the box. Sent as dictation only while it is unchanged.
 let dictated = "";
-// Browser speech by default. OpenAI only when chosen under Advanced.
-let sttEngine = readSetting("stt") === "openai" ? "openai" : "browser";
+// Browser speech by default. NEAR AI or OpenAI only when chosen under Advanced.
+const STT_ENGINES = ["browser", "near_ai", "openai"];
+let sttEngine = STT_ENGINES.includes(readSetting("stt")) ? readSetting("stt") : "browser";
+// What the server has set up, and which service answered last.
+let providers = { transcribe: [], repair: [], near_ai: false };
+let lastProvider = null;
 // Voice mode is off until the user turns it on, and then every reply is also spoken.
 const voice = window.NearVoice.createVoiceMode({
   locale: () => SPEECH_LOCALES[language],
   lang: () => language,
   engine: () => sttEngine,
   engineFailed: (spoken) => useBrowserSpeech(spoken),
+  providerUsed: (name, backup) => showProvider(name, backup),
   busy: () => Boolean(controller),
   // A live quote and a "did you mean" both need an answer, so silence cancels them.
   livePending: () => Boolean(pending && pendingLive),
   showListening: (on) => showListening(on),
   sendVoice: (heard) => {
     sentence.value = heard.text;
-    ask(heard.text, { voice: true, confidence: heard.confidence, alternatives: heard.alternatives });
+    const fields = { voice: true, confidence: heard.confidence, alternatives: heard.alternatives };
+    ask(heard.text, { ...fields, engine: heard.engine || "browser" });
   },
   stopped: (reason) => stopVoice(reason),
 });
@@ -219,11 +237,51 @@ function saveSetting(name, value) {
   }
 }
 
+const STT_SET = { browser: "sttSetBrowser", near_ai: "sttSetNearai", openai: "sttSetOpenai" };
+const PROVIDER_NAMES = { near_ai: "NEAR AI", openai: "OpenAI" };
+
 function setSttEngine(next, spoken) {
   sttEngine = next;
   byId("stt").value = next;
   saveSetting("stt", next);
-  announce(spoken || TEXT[language][next === "openai" ? "sttSetOpenai" : "sttSetBrowser"]);
+  announce(spoken || TEXT[language][STT_SET[next]]);
+}
+
+// The line under Advanced. It is a live region, so a switch to the backup is heard.
+function paintProvider() {
+  const text = TEXT[language];
+  const state = byId("provider-state");
+  const name = lastProvider ? lastProvider.name : providers.transcribe[0] || providers.repair[0];
+  let line = text.providerNone;
+  if (name) {
+    const label = PROVIDER_NAMES[name] || name;
+    line = text.providerLine.replace("{name}", lastProvider && lastProvider.backup ? text.providerBackup.replace("{name}", label) : label);
+  }
+  if (state.textContent !== line) state.textContent = line;
+}
+
+function showProvider(name, backup) {
+  if (!PROVIDER_NAMES[name]) return;
+  lastProvider = { name, backup };
+  paintProvider();
+}
+
+function paintSttOptions() {
+  const text = TEXT[language];
+  byId("stt-browser").textContent = text.sttBrowser;
+  byId("stt-near-ai").textContent = text.sttNearai + (providers.near_ai ? text.recommended : "");
+  byId("stt-openai").textContent = text.sttOpenai;
+}
+
+async function loadProviders() {
+  try {
+    const response = await fetch("api/providers");
+    if (response.ok) providers = await response.json();
+  } catch {
+    // Without the list the page still works, and says no provider is in use.
+  }
+  paintSttOptions();
+  paintProvider();
 }
 
 // OpenAI is off or failed, so the browser's speech takes over and the user hears why.
@@ -326,8 +384,8 @@ function applyLanguage(next) {
   byId("advanced-summary").textContent = text.advanced;
   byId("lang-label").textContent = text.lang;
   byId("stt-label").textContent = text.stt;
-  byId("stt-browser").textContent = text.sttBrowser;
-  byId("stt-openai").textContent = text.sttOpenai;
+  paintSttOptions();
+  paintProvider();
   byId("from-label").textContent = text.from;
   byId("to-label").textContent = text.to;
   byId("amount-label").textContent = text.amount;
@@ -451,6 +509,7 @@ async function send(path, body, button) {
     const data = await response.json();
     pending = data.pending || null;
     pendingLive = Boolean(pending && (data.confirm_button || data.answer_required));
+    if (data.provider && data.provider !== "rule") showProvider(data.provider, Boolean(data.backup));
     if (data.expires_in) startQuoteTimers(data.expires_in);
     else if (!pending) clearQuoteTimers();
     const confirmButton = byId("confirm");
@@ -522,7 +581,7 @@ function writeDictation(heard) {
 // The microphone with OpenAI: record, then send the clip. Start and end are announced.
 function dictateWithRecorder() {
   const text = TEXT[language];
-  const session = window.NearVoice.createRecorder({ lang: language });
+  const session = window.NearVoice.createRecorder({ lang: language, provider: sttEngine, onProvider: showProvider });
   let finished = false;
   session.onrecorded = () => announce(text.recordingDone);
   session.onresult = (event) => {
@@ -555,7 +614,7 @@ function toggleListening() {
     listening.stop();
     return;
   }
-  if (sttEngine === "openai" && window.NearVoice.recorderSupported()) {
+  if (sttEngine !== "browser" && window.NearVoice.recorderSupported()) {
     dictateWithRecorder();
     return;
   }
@@ -732,3 +791,4 @@ langSelect.addEventListener("change", () => {
 });
 applyLanguage(language);
 byId("stt").value = sttEngine;
+loadProviders();

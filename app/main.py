@@ -53,6 +53,7 @@ from app.intent import Intent, ParserUnavailable, parse_intent  # noqa: E402
 from app.voice_text import amount_answer, normalize_voice  # noqa: E402
 from app import intent_repair  # noqa: E402
 from app import transcribe as speech  # noqa: E402
+from app.providers import near_ai_key  # noqa: E402
 from app.messages import (  # noqa: E402
     detect_language,
     format_amount,
@@ -133,6 +134,8 @@ class AskInput(BaseModel):
     )
     # The page sets dictation when the text came from the microphone and was not edited.
     source: Literal["typed", "dictation"] | None = None
+    # Which speech to text heard a voice answer. Whisper on NEAR AI gives no confidence.
+    engine: Literal["browser", "near_ai", "openai"] | None = None
 
 
 class ModeInput(BaseModel):
@@ -616,6 +619,9 @@ async def answer_voice(data: AskInput, text: str, lang: str) -> dict | JSONRespo
         pendings.drop(key)
         return reply("cancelled", "voice_silence", item.lang)
     if not voice_clear(data.confidence):
+        # A service that gives no confidence cannot confirm by voice, so typing is asked for.
+        if data.confidence is None and data.engine in ("near_ai", "openai"):
+            return ask_again(item, key, "voice_no_confidence")
         pendings.drop(key)
         return reply("cancelled", "voice_unclear", item.lang)
     if not voice_confirms(text):
@@ -630,7 +636,7 @@ async def answer_voice(data: AskInput, text: str, lang: str) -> dict | JSONRespo
     return voiced_offer(await run_live(item))
 
 
-def repair_question(item_swap: dict, lang: str, live: bool) -> dict:
+def repair_question(item_swap: dict, lang: str, live: bool, provider: str = "rule", backup: bool = False) -> dict:
     key = pendings.add("repair", lang, swap=item_swap, live=live, seconds=REPAIR_SECONDS)
     sentence = say_repair_sentence(item_swap, lang)
     return {
@@ -639,6 +645,8 @@ def repair_question(item_swap: dict, lang: str, live: bool) -> dict:
         "pending": key,
         # Silence in voice mode cancels this question, as it does a live quote.
         "answer_required": True,
+        "provider": provider,
+        "backup": backup,
         "spoken": say("repair_question", lang, sentence=sentence),
     }
 
@@ -651,7 +659,7 @@ async def offer_repair(text: str, lang: str, live: bool, use_model: bool = True)
     if found.kind == "ask_amount":
         key = pendings.add("repair_amount", lang, swap=found.swap, live=live, seconds=REPAIR_SECONDS)
         return {**reply("ask_amount", "missing_amount", lang, key), "answer_required": True}
-    return repair_question(found.swap, lang, live)
+    return repair_question(found.swap, lang, live, found.provider, found.backup)
 
 
 def unrepaired(error: QuoteError, lang: str, live: bool) -> JSONResponse:
@@ -781,9 +789,23 @@ def stt_reply(status: int, key: str, lang: str) -> JSONResponse:
     return JSONResponse(status_code=status, content={"error": key, "language": lang, "spoken": say(key, lang)})
 
 
+@app.get("/api/providers")
+async def providers_status():
+    """Which services are set up, and which goes first. Never a key."""
+    return {
+        "transcribe": speech.available(),
+        "repair": [service.name for service in intent_repair.repair_chain()] if intent_repair.llm_allowed else [],
+        "near_ai": bool(near_ai_key()),
+    }
+
+
 @app.post("/api/transcribe")
-async def transcribe_audio(request: Request, lang: Literal["tr", "en"] = "tr"):
-    """A short recording to text, with OpenAI. The page falls back to Web Speech on any error."""
+async def transcribe_audio(
+    request: Request,
+    lang: Literal["tr", "en"] = "tr",
+    provider: Literal["near_ai", "openai"] | None = None,
+):
+    """A short recording to text. NEAR AI first, then OpenAI. The page falls back to Web Speech."""
     if not speech.ready():
         return stt_reply(503, "stt_off", lang)
     audio = bytearray()
@@ -794,7 +816,7 @@ async def transcribe_audio(request: Request, lang: Literal["tr", "en"] = "tr"):
     if not audio:
         return stt_reply(400, "stt_failed", lang)
     try:
-        heard = await speech.transcribe(bytes(audio), request.headers.get("content-type", ""), lang)
+        heard = await speech.transcribe(bytes(audio), request.headers.get("content-type", ""), lang, provider)
     except speech.TranscribeOff:
         return stt_reply(503, "stt_off", lang)
     except speech.TranscribeFailed:

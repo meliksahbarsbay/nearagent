@@ -129,7 +129,7 @@ function recorderSupported() {
   );
 }
 
-function createRecorder({ lang }) {
+function createRecorder({ lang, provider, onProvider }) {
   const self = { onresult: null, onerror: null, onend: null, onspeechstart: null, onrecorded: null };
   let stream = null;
   let context = null;
@@ -172,7 +172,8 @@ function createRecorder({ lang }) {
     if (self.onrecorded) self.onrecorded();
     const blob = new Blob(chunks, { type: (recorder && recorder.mimeType) || "audio/webm" });
     try {
-      const response = await fetch(`api/transcribe?lang=${lang === "en" ? "en" : "tr"}`, {
+      const service = provider === "openai" ? "openai" : "near_ai";
+      const response = await fetch(`api/transcribe?lang=${lang === "en" ? "en" : "tr"}&provider=${service}`, {
         method: "POST",
         headers: { "Content-Type": blob.type || "audio/webm" },
         body: blob,
@@ -184,10 +185,13 @@ function createRecorder({ lang }) {
         return;
       }
       const confidence = Number(data.confidence);
+      // Which service answered. Whisper on NEAR AI gives no confidence, and the server knows it.
+      if (onProvider) onProvider(data.provider, Boolean(data.backup));
       const parsed = {
         text: String(data.text || "").trim(),
-        confidence: Number.isFinite(confidence) && confidence > 0 ? Math.min(confidence, 1) : null,
+        confidence: data.confidence !== null && Number.isFinite(confidence) && confidence > 0 ? Math.min(confidence, 1) : null,
         alternatives: [],
+        engine: data.provider === "openai" ? "openai" : "near_ai",
       };
       if (self.onresult) self.onresult({ parsed });
       end();
@@ -313,8 +317,10 @@ function createVoiceMode(hooks) {
 
   function listen() {
     if (!on || session || synth.speaking || synth.pending || hooks.busy()) return;
-    const recording = hooks.engine() === "openai" && recorderSupported();
-    const current = recording ? createRecorder({ lang: hooks.lang() }) : new Recognition();
+    const recording = hooks.engine() !== "browser" && recorderSupported();
+    const current = recording
+      ? createRecorder({ lang: hooks.lang(), provider: hooks.engine(), onProvider: hooks.providerUsed })
+      : new Recognition();
     let heard = false;
     current.lang = hooks.locale();
     current.continuous = false;

@@ -128,14 +128,15 @@ class ParserUnavailable(Exception):
 
 def providers() -> list[Provider]:
     found = []
-    near_key = os.getenv("NEAR_AI_API_KEY")
+    # NEARAI_* is the current name. NEAR_AI_* still works.
+    near_key = os.getenv("NEARAI_API_KEY") or os.getenv("NEAR_AI_API_KEY")
     if near_key:
         found.append(
             Provider(
                 "near_ai",
-                os.getenv("NEAR_AI_BASE_URL") or DEFAULT_NEAR_AI_BASE_URL,
+                os.getenv("NEARAI_BASE_URL") or os.getenv("NEAR_AI_BASE_URL") or DEFAULT_NEAR_AI_BASE_URL,
                 near_key,
-                os.getenv("NEAR_AI_MODEL") or DEFAULT_NEAR_AI_MODEL,
+                os.getenv("NEARAI_MODEL") or os.getenv("NEAR_AI_MODEL") or DEFAULT_NEAR_AI_MODEL,
             )
         )
     openai_key = os.getenv("OPENAI_API_KEY")
