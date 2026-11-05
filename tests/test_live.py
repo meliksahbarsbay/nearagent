@@ -604,10 +604,11 @@ def test_processing_then_done_with_a_link(agent):
     data = track(client, track_id)
     assert data["final"] is True
     assert data["spoken"] == (
-        "Tamamlandı. 0,00399 SOL aldın. İşlem bağlantısı için kopyala düğmesini kullan."
+        "Tamamlandı. 0,00399 SOL aldın. Gezgin bağlantısı Kimlikler bölümünde."
     )
     assert data["proof"] == "https://nearblocks.io/txns/HASH1"
     assert data["proof_key"] == "proof"
+    assert data["copies"] == [{"key": "proof", "value": "https://nearblocks.io/txns/HASH1"}]
 
 
 def test_link_form_can_be_set(agent, monkeypatch):
@@ -625,6 +626,70 @@ def test_intent_hash_is_copied_when_there_is_no_transaction(agent):
     data = track(client, track_id)
     assert data["proof"] == "INTENT"
     assert data["proof_key"] == "proof_id"
+    assert data["spoken"] == "Tamamlandı. 0,001 SOL aldın. Kayıt kimliği için kopyala düğmesini kullan."
+
+
+# The first real swap gave no transaction hash, only these fields.
+REAL_DONE = {
+    "amount_out": "1000000",
+    "intent_hash": "INTENT",
+    "near_account_id": "agentaccount",
+}
+
+
+def test_without_a_hash_the_agents_page_comes_before_the_intent_hash(agent):
+    client, _ = make_client()
+    track_id = confirmed(client, agent)["track"]
+    agent.status_replies = [status("SUCCESS", **REAL_DONE)]
+    data = track(client, track_id)
+    assert data["copies"] == [
+        {"key": "agent_txns", "value": "https://nearblocks.io/address/agentaccount/mt-tokens"},
+        {"key": "proof_id", "value": "INTENT"},
+    ]
+    assert data["proof"] == "https://nearblocks.io/address/agentaccount/mt-tokens"
+    assert data["spoken"] == "Tamamlandı. 0,001 SOL aldın. Gezgin bağlantısı Kimlikler bölümünde."
+    assert "agentaccount" not in data["spoken"]
+
+
+def test_a_transaction_link_comes_first(agent):
+    client, _ = make_client()
+    track_id = confirmed(client, agent)["track"]
+    agent.status_replies = [status("SUCCESS", tx_hash="H", **REAL_DONE)]
+    keys = [item["key"] for item in track(client, track_id)["copies"]]
+    assert keys == ["proof", "agent_txns", "proof_id"]
+
+
+def test_a_known_deposit_address_opens_the_intents_explorer(agent):
+    client, _ = make_client()
+    track_id = confirmed(client, agent)["track"]
+    agent.status_replies = [status("SUCCESS", deposit_address="DEP", **REAL_DONE)]
+    copies = track(client, track_id)["copies"]
+    assert copies[0] == {"key": "explorer", "value": "https://explorer.near-intents.org/transactions/DEP"}
+    assert [item["key"] for item in copies] == ["explorer", "agent_txns", "proof_id"]
+
+
+def test_account_link_form_can_be_set(agent, monkeypatch):
+    monkeypatch.setenv("EXPLORER_ACCOUNT_URL", "https://example.test/a/{account}")
+    client, _ = make_client()
+    track_id = confirmed(client, agent)["track"]
+    agent.status_replies = [status("SUCCESS", **REAL_DONE)]
+    assert track(client, track_id)["proof"] == "https://example.test/a/agentaccount"
+
+
+def test_the_saved_trade_keeps_the_first_link(agent):
+    client, _ = make_client()
+    track_id = confirmed(client, agent)["track"]
+    agent.status_replies = [status("SUCCESS", **REAL_DONE)]
+    track(client, track_id)
+    assert live.history.recent(1)[0]["ref"] == "https://nearblocks.io/address/agentaccount/mt-tokens"
+
+
+def test_english_done_names_the_explorer_link(agent):
+    client, _ = make_client()
+    track_id = confirmed(client, agent)["track"]
+    agent.status_replies = [status("SUCCESS", **REAL_DONE)]
+    data = client.post("/api/live/status", json={"track": track_id, "lang": "en"}).json()
+    assert data["spoken"] == "Done. You received 0.001 SOL. The explorer link is in the Identifiers section."
 
 
 def test_hashes_are_never_read_aloud(agent):

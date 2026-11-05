@@ -598,6 +598,7 @@ async def live_status(data: TrackInput):
     if view.get("proof"):
         content["proof"] = view["proof"]
         content["proof_key"] = view["proof_key"]
+        content["copies"] = view["proofs"]
     return content
 
 

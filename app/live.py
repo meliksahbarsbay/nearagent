@@ -49,6 +49,11 @@ DEFAULT_SLIPPAGE = Decimal("0.01")
 STATUS_WAIT_MS = 3_000
 # The documented link form is unknown, so it lives in one place, and can be set.
 DEFAULT_TX_URL = "https://nearblocks.io/txns/{hash}"
+# The Agent API gave no transaction hash for the first real swap, but it names the agent's
+# intents account, and that page lists each token movement with its transaction.
+DEFAULT_ACCOUNT_URL = "https://nearblocks.io/address/{account}/mt-tokens"
+# The NEAR Intents explorer finds a 1Click swap by its deposit address, not by intent hash.
+DEFAULT_INTENTS_URL = "https://explorer.near-intents.org/transactions/{address}"
 
 # Rules the live swap would fail, as `warnings` lists them on a quote.
 BLOCKING_WARNINGS = {
@@ -713,13 +718,31 @@ async def execute_withdraw(order: WithdrawOrder) -> str | None:
     return track
 
 
-def proof_of(details: dict) -> tuple[str | None, str]:
-    """A link when there is a transaction hash, otherwise the intent hash itself."""
+def link(setting: str, default: str, slot: str, value: str) -> str:
+    return (os.getenv(setting) or default).replace(slot, value)
+
+
+def proofs_of(details: dict, withdrawing: bool = False) -> list[dict]:
+    """Every public trace of a finished operation, the most specific first.
+
+    A transaction link when there is a hash, then the swap's page on the NEAR Intents
+    explorer when its deposit address is known, then the agent's own token movements,
+    and last the intent hash, which no explorer opens.
+    """
+    proofs = []
     tx_hash = details.get("destination_tx_hash") or details.get("tx_hash")
     if tx_hash:
-        url = os.getenv("EXPLORER_TX_URL") or DEFAULT_TX_URL
-        return url.replace("{hash}", tx_hash), "proof"
-    return details.get("intent_hash"), "proof_id"
+        proofs.append({"key": "proof", "value": link("EXPLORER_TX_URL", DEFAULT_TX_URL, "{hash}", tx_hash)})
+    # Only a swap goes through a 1Click deposit address. The first real swap named none.
+    if details.get("deposit_address") and not withdrawing:
+        address = details["deposit_address"]
+        proofs.append({"key": "explorer", "value": link("EXPLORER_INTENTS_URL", DEFAULT_INTENTS_URL, "{address}", address)})
+    if details.get("near_account_id"):
+        account = details["near_account_id"]
+        proofs.append({"key": "agent_txns", "value": link("EXPLORER_ACCOUNT_URL", DEFAULT_ACCOUNT_URL, "{account}", account)})
+    if details.get("intent_hash"):
+        proofs.append({"key": "proof_id", "value": details["intent_hash"]})
+    return proofs
 
 
 STATES = {
@@ -756,7 +779,10 @@ async def read_operation(track: str) -> dict:
     elif withdrawing and state == "done":
         view["amount"] = order.amount_text
     if state == "done":
-        view["proof"], view["proof_key"] = proof_of(details)
+        proofs = proofs_of(details, withdrawing)
+        if proofs:
+            view["proof"], view["proof_key"] = proofs[0]["value"], proofs[0]["key"]
+            view["proofs"] = proofs
     if state == "failed":
         view["never_ran"] = bool(details.get("never_executed") or details.get("never_submitted"))
         if view["never_ran"] and not withdrawing:

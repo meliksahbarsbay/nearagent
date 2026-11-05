@@ -47,6 +47,8 @@ const TEXT = {
     stopped: "Bekleyen isteği iptal ettim.",
     idsHeading: "Kimlikler",
     copy: "Kopyala",
+    open: "Gezginde aç",
+    newTab: "yeni sekmede açılır",
     copied: "Kopyalandı.",
     copyFailed: "Kopyalanamadı. Tarayıcının pano iznini kontrol et.",
     trackStopped: "Takibi durdurdum, sonuç hâlâ belirsiz. Yeniden gönderme, önce bakiyeni kontrol et.",
@@ -55,7 +57,9 @@ const TEXT = {
       from: "Gönderilen token kimliği",
       to: "Alınan token kimliği",
       proof: "İşlem bağlantısı",
-      proof_id: "İşlem kimliği",
+      explorer: "NEAR Intents gezgininde takas",
+      agent_txns: "Ajanın token hareketleri, nearblocks",
+      proof_id: "Kayıt kimliği",
       trade: "İşlem",
       owner_address: "Sahip adresi",
     },
@@ -106,6 +110,8 @@ const TEXT = {
     stopped: "I cancelled the waiting request.",
     idsHeading: "Identifiers",
     copy: "Copy",
+    open: "Open in explorer",
+    newTab: "opens in a new tab",
     copied: "Copied.",
     copyFailed: "Could not copy. Check the browser's clipboard permission.",
     trackStopped: "I stopped tracking, and the result is still unknown. Do not send it again. Check your balance first.",
@@ -114,7 +120,9 @@ const TEXT = {
       from: "ID of the token to send",
       to: "ID of the token to receive",
       proof: "Transaction link",
-      proof_id: "Transaction ID",
+      explorer: "Swap on the NEAR Intents explorer",
+      agent_txns: "Agent's token movements, nearblocks",
+      proof_id: "Record ID",
       trade: "Trade",
       owner_address: "Owner address",
     },
@@ -194,6 +202,16 @@ function renderIds() {
     button.dataset.value = value;
     button.addEventListener("click", () => copy(value));
     item.append(label, shown, button);
+    // Only a web address becomes a link. An intent hash opens in no explorer.
+    if (value.startsWith("https://")) {
+      const open = document.createElement("a");
+      open.href = value;
+      open.target = "_blank";
+      open.rel = "noopener noreferrer";
+      open.textContent = text.open;
+      open.setAttribute("aria-label", `${name}: ${text.open}, ${text.newTab}`);
+      item.append(" ", open);
+    }
     list.append(item);
   }
   if (place >= 0) restoreFocus(focusedValue, place);

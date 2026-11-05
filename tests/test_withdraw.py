@@ -530,9 +530,17 @@ def test_following_to_done_with_a_link(wallet):
     assert track(client, track_id)["spoken"].startswith("İşleniyor")
     data = track(client, track_id)
     assert data["spoken"] == (
-        "Çekim tamamlandı. 3,99 USDC sahip adresine gitti. İşlem bağlantısı için kopyala düğmesini kullan."
+        "Çekim tamamlandı. 3,99 USDC sahip adresine gitti. Gezgin bağlantısı Kimlikler bölümünde."
     )
     assert data["proof"].endswith("/H")
+
+
+def test_a_withdrawal_never_links_a_swap_deposit_address(wallet):
+    client, _ = make_client()
+    track_id = confirm(client)
+    wallet.status_replies = [status("SUCCESS", deposit_address="DEP", near_account_id="agentaccount")]
+    keys = [item["key"] for item in track(client, track_id)["copies"]]
+    assert keys == ["agent_txns"]
 
 
 def test_done_without_a_delivered_figure_reads_the_sent_amount(wallet):

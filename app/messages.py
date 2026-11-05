@@ -39,7 +39,8 @@ MESSAGES = {
         "withdraw_budget": "Bu çekim günlük bütçenden yaklaşık {usd} dolar düşer, kalan {left} dolar olur.",
         "withdraw_budget_no_cap": "Bu çekim yaklaşık {usd} dolar, günlük bütçe sınırı yok.",
         "withdraw_done": "Çekim tamamlandı. {amount} {symbol} sahip adresine gitti.",
-        "withdraw_done_proof": "Çekim tamamlandı. {amount} {symbol} sahip adresine gitti. İşlem bağlantısı için kopyala düğmesini kullan.",
+        "withdraw_done_proof": "Çekim tamamlandı. {amount} {symbol} sahip adresine gitti. Gezgin bağlantısı Kimlikler bölümünde.",
+        "withdraw_done_proof_id": "Çekim tamamlandı. {amount} {symbol} sahip adresine gitti. Kayıt kimliği için kopyala düğmesini kullan.",
         "withdraw_needs_live": "Çekim gerçek para kullanır, işlem yapılmadı. Önce Gelişmiş bölümünden canlı modu aç.",
         "withdraw_no_budget": "Günlük bütçe yetmiyor, bugün çekilemez. Yarın tekrar dene.",
         "withdraw_over_limit": "Bu tutar tek işlem sınırını aşıyor, işlem yapılmadı. Daha küçük bir tutar söyle.",
@@ -97,7 +98,8 @@ MESSAGES = {
         "live_approval": "Sahip onayı bekleniyor. Onaylanınca devam edecek.",
         "live_uncertain": "Sonuç henüz kesinleşmedi. Yeniden gönderme, takip ediyorum.",
         "live_done": "Tamamlandı. {amount} {symbol} aldın.",
-        "live_done_proof": "Tamamlandı. {amount} {symbol} aldın. İşlem bağlantısı için kopyala düğmesini kullan.",
+        "live_done_proof": "Tamamlandı. {amount} {symbol} aldın. Gezgin bağlantısı Kimlikler bölümünde.",
+        "live_done_proof_id": "Tamamlandı. {amount} {symbol} aldın. Kayıt kimliği için kopyala düğmesini kullan.",
         "live_refunded": "İade edildi. Para ajanın kendi bakiyesine döndü. Yeni bir teklif isteyebilirsin.",
         "live_refunded_part": "Kısmen tamamlandı. {amount} {symbol} aldın, kalan para ajanın kendi bakiyesine döndü. Bakiyeni kontrol et.",
         "live_failed": "Başarısız, para hareket etmedi. Yeni bir teklif isteyebilirsin.",
@@ -202,7 +204,8 @@ MESSAGES = {
         "withdraw_budget": "This takes about {usd} dollars from your daily budget, leaving {left} dollars.",
         "withdraw_budget_no_cap": "This is about {usd} dollars, and there is no daily budget cap.",
         "withdraw_done": "Withdrawal done. {amount} {symbol} went to your owner address.",
-        "withdraw_done_proof": "Withdrawal done. {amount} {symbol} went to your owner address. Use the copy button for the transaction link.",
+        "withdraw_done_proof": "Withdrawal done. {amount} {symbol} went to your owner address. The explorer link is in the Identifiers section.",
+        "withdraw_done_proof_id": "Withdrawal done. {amount} {symbol} went to your owner address. Use the copy button for the record ID.",
         "withdraw_needs_live": "A withdrawal uses real money, so nothing was sent. Turn on live mode in the Advanced section first.",
         "withdraw_no_budget": "The daily budget is too low, so this cannot be withdrawn today. Try again tomorrow.",
         "withdraw_over_limit": "This is over the one transaction limit, so nothing was sent. Ask for a smaller amount.",
@@ -260,7 +263,8 @@ MESSAGES = {
         "live_approval": "Waiting for the owner's approval. It continues once approved.",
         "live_uncertain": "The result is not final yet. Do not send it again. I am following it.",
         "live_done": "Done. You received {amount} {symbol}.",
-        "live_done_proof": "Done. You received {amount} {symbol}. Use the copy button for the transaction link.",
+        "live_done_proof": "Done. You received {amount} {symbol}. The explorer link is in the Identifiers section.",
+        "live_done_proof_id": "Done. You received {amount} {symbol}. Use the copy button for the record ID.",
         "live_refunded": "Refunded. The funds went back to the agent's own balance. You can ask for a new quote.",
         "live_refunded_part": "Partly done. You received {amount} {symbol}, and the rest went back to the agent's own balance. Check your balance.",
         "live_failed": "Failed, and no funds moved. You can ask for a new quote.",
@@ -479,7 +483,11 @@ def say_live_status(view: dict, lang: str) -> str:
     values = {"amount": format_amount(view.get("amount") or "0", lang), "symbol": view.get("symbol")}
     if state == "done":
         key = "withdraw_done" if view.get("withdraw") else "live_done"
-        return say(f"{key}_proof" if view.get("proof") else key, lang, **values)
+        if not view.get("proof"):
+            return say(key, lang, **values)
+        # An intent hash alone opens in no explorer, so it is not called a link.
+        linked = any(item["value"].startswith("https://") for item in view.get("proofs") or [])
+        return say(f"{key}_proof" if linked else f"{key}_proof_id", lang, **values)
     if state == "refunded":
         if view.get("amount"):
             return say("live_refunded_part", lang, **values)
