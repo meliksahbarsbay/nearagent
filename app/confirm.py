@@ -69,7 +69,7 @@ def code_matches(text: str, code: str) -> bool:
 
 @dataclass
 class Pending:
-    kind: Literal["amount", "large", "confirm", "unfreeze"]
+    kind: Literal["amount", "large", "confirm", "unfreeze", "repair", "repair_amount"]
     lang: str
     swap: dict = field(default_factory=dict)
     expires_at: float = 0.0

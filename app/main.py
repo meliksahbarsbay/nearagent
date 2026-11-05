@@ -1,4 +1,5 @@
 """nearagent API. Serves the page, sentence requests, and the advanced form."""
+import json
 from datetime import datetime, timezone
 from decimal import Decimal
 from math import ceil
@@ -6,7 +7,7 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -50,6 +51,8 @@ from app.confirm import (  # noqa: E402
 )
 from app.intent import Intent, ParserUnavailable, parse_intent  # noqa: E402
 from app.voice_text import amount_answer, normalize_voice  # noqa: E402
+from app import intent_repair  # noqa: E402
+from app import transcribe as speech  # noqa: E402
 from app.messages import (  # noqa: E402
     detect_language,
     format_amount,
@@ -66,6 +69,7 @@ from app.messages import (  # noqa: E402
     say_price,
     say_price_usd,
     say_quote,
+    say_repair_sentence,
     say_usd_note,
     say_withdraw,
 )
@@ -93,6 +97,9 @@ MAX_SENTENCE = 300
 LARGE_USD = Decimal(100)
 MAX_CODE_ATTEMPTS = 3
 TEXT_ERRORS = {"empty_text", "too_long"}
+# A sentence that failed on its tokens may still say something clear. See app/intent_repair.py.
+REPAIRABLE = {"unknown_token", "missing_token"}
+REPAIR_SECONDS = 120
 RECENT_TRADES = 5
 UNFREEZE_COOLDOWN_MINUTES = 10
 ALREADY_DONE = {
@@ -124,6 +131,8 @@ class AskInput(BaseModel):
     alternatives: list[Annotated[str, Field(max_length=MAX_SENTENCE)]] = Field(
         default_factory=list, max_length=MAX_ALTERNATIVES
     )
+    # The page sets dictation when the text came from the microphone and was not edited.
+    source: Literal["typed", "dictation"] | None = None
 
 
 class ModeInput(BaseModel):
@@ -491,6 +500,10 @@ async def answer_pending(
         return await answer_unfreeze(key, item, text)
     if item.kind == "amount":
         return await answer_amount(client, key, item, text)
+    if item.kind == "repair_amount":
+        return answer_repair_amount(key, item, text)
+    if item.kind == "repair":
+        return await answer_repair(client, key, item, text, word)
     if word != "yes":
         if text:
             return ask_again(item, key, "not_understood")
@@ -617,10 +630,90 @@ async def answer_voice(data: AskInput, text: str, lang: str) -> dict | JSONRespo
     return voiced_offer(await run_live(item))
 
 
+def repair_question(item_swap: dict, lang: str, live: bool) -> dict:
+    key = pendings.add("repair", lang, swap=item_swap, live=live, seconds=REPAIR_SECONDS)
+    sentence = say_repair_sentence(item_swap, lang)
+    return {
+        "action": "repair",
+        "language": lang,
+        "pending": key,
+        # Silence in voice mode cancels this question, as it does a live quote.
+        "answer_required": True,
+        "spoken": say("repair_question", lang, sentence=sentence),
+    }
+
+
+async def offer_repair(text: str, lang: str, live: bool, use_model: bool = True) -> dict | None:
+    """A suggestion, or how much, for a sentence that failed. None when nothing is clear."""
+    found = await intent_repair.suggest(text, lang, live, use_model)
+    if found is None:
+        return None
+    if found.kind == "ask_amount":
+        key = pendings.add("repair_amount", lang, swap=found.swap, live=live, seconds=REPAIR_SECONDS)
+        return {**reply("ask_amount", "missing_amount", lang, key), "answer_required": True}
+    return repair_question(found.swap, lang, live)
+
+
+def unrepaired(error: QuoteError, lang: str, live: bool) -> JSONResponse:
+    """The usual error, with the tokens that can be used."""
+    response = error_response(error, lang)
+    content = json.loads(response.body)
+    tokens = ", ".join(intent_repair.supported(live))
+    content["spoken"] = f"{content['spoken']} {say('supported_tokens', lang, tokens=tokens)}"
+    return JSONResponse(status_code=response.status_code, content=content)
+
+
+def answer_repair_amount(key: str, item: Pending, text: str) -> dict:
+    """How much, for a suggestion. The answer leads to the question, not to a quote."""
+    tokens = {item.swap["from_token"], item.swap["to_token"]}
+    answer = read_answer(text, item.lang, tokens)
+    if answer is None or (answer.token and answer.token != item.swap["from_token"]):
+        return {**reply("ask_amount", "amount_again", item.lang, key), "answer_required": True}
+    pendings.drop(key)
+    swap = {**item.swap, "amount": answer.value, "unit": "usd" if answer.usd else "token"}
+    return repair_question(swap, item.lang, item.live)
+
+
+async def answer_repair(client: OneClick, key: str, item: Pending, text: str, word: str | None):
+    """Only yes asks for the quote. This yes accepts the sentence, never a live swap."""
+    pendings.drop(key)
+    if word != "yes":
+        if text:
+            # Not an answer but a new sentence, so it is read as one.
+            return await answer_ask(AskInput(text=text, live=item.live), client)
+        return reply("cancelled", "repair_no_yes", item.lang)
+    swap = item.swap
+    try:
+        return await run_swap(
+            client,
+            swap["from_token"],
+            None,
+            swap["to_token"],
+            None,
+            swap["amount"],
+            item.lang,
+            item.live,
+            unit=swap.get("unit", "token"),
+        )
+    except QuoteError as error:
+        return error_response(error, item.lang)
+
+
+def from_dictation(data: AskInput) -> AskInput:
+    """Dictated text is fixed like voice mode. Typed text never comes here."""
+    text = normalize_voice(data.text.strip())
+    waiting = pendings.get(data.pending) if data.pending else None
+    if waiting is not None and waiting.kind in ("amount", "repair_amount"):
+        text = amount_answer(text)
+    return data.model_copy(update={"text": text})
+
+
 @app.post("/api/ask")
 async def ask(data: AskInput, client: OneClick = Depends(get_oneclick)):
     if data.voice:
         return voiced_offer(await ask_by_voice(data, client))
+    if data.source == "dictation":
+        return await answer_ask(from_dictation(data), client)
     return await answer_ask(data, client)
 
 
@@ -628,7 +721,7 @@ async def ask_by_voice(data: AskInput, client: OneClick):
     # Speech writes numbers and token names its own way. Typed text never comes through here.
     text = normalize_voice(data.text.strip())
     waiting = pendings.get(data.pending) if data.pending else None
-    if waiting is not None and waiting.kind == "amount":
+    if waiting is not None and waiting.kind in ("amount", "repair_amount"):
         text = amount_answer(text)
     data = data.model_copy(update={"text": text})
     command = detect_command(text) if len(text) <= MAX_SENTENCE else None
@@ -665,11 +758,48 @@ async def answer_ask(data: AskInput, client: OneClick):
         try:
             intent = await parse_intent(text)
         except ParserUnavailable:
+            # With no key, the rules alone may still read the sentence. They suggest, never quote.
+            offer = await offer_repair(text, lang, data.live, use_model=False)
+            if offer is not None:
+                return offer
             raise QuoteError("no_parser", 503) from None
         lang = intent.language
-        return await run_intent(client, intent, data.live)
+        try:
+            return await run_intent(client, intent, data.live)
+        except QuoteError as error:
+            if error.code not in REPAIRABLE:
+                raise
+            offer = await offer_repair(text, lang, data.live)
+            if offer is not None:
+                return offer
+            return unrepaired(error, lang, data.live)
     except QuoteError as error:
         return error_response(error, lang, field="text" if error.code in TEXT_ERRORS else None)
+
+
+def stt_reply(status: int, key: str, lang: str) -> JSONResponse:
+    return JSONResponse(status_code=status, content={"error": key, "language": lang, "spoken": say(key, lang)})
+
+
+@app.post("/api/transcribe")
+async def transcribe_audio(request: Request, lang: Literal["tr", "en"] = "tr"):
+    """A short recording to text, with OpenAI. The page falls back to Web Speech on any error."""
+    if not speech.ready():
+        return stt_reply(503, "stt_off", lang)
+    audio = bytearray()
+    async for chunk in request.stream():
+        audio.extend(chunk)
+        if len(audio) > speech.MAX_AUDIO_BYTES:
+            return stt_reply(413, "stt_too_long", lang)
+    if not audio:
+        return stt_reply(400, "stt_failed", lang)
+    try:
+        heard = await speech.transcribe(bytes(audio), request.headers.get("content-type", ""), lang)
+    except speech.TranscribeOff:
+        return stt_reply(503, "stt_off", lang)
+    except speech.TranscribeFailed:
+        return stt_reply(502, "stt_failed", lang)
+    return {"language": lang, **heard}
 
 
 @app.post("/api/quote")

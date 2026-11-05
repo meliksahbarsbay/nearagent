@@ -108,6 +108,14 @@ MESSAGES = {
         "voice_unclear": "Seni net duyamadım, onay saymadım. İptal ettim, işlem yapılmadı.",
         "voice_silence": "Onay duymadım, iptal ettim. İşlem yapılmadı.",
         "voice_not_heard": "Cevabını duyamadım. Evet ya da hayır de.",
+        "repair_question": "Bunu mu demek istedin: {sentence}? Evet ya da hayır de.",
+        "repair_sentence": "{amount} {from_acc} {to_dat} çevir",
+        "repair_sentence_usd": "{amount} dolarlık {from_acc} {to_dat} çevir",
+        "repair_no_yes": "Evet demediğin için iptal ettim, teklif istemedim. Cümleyi yeniden söyle.",
+        "supported_tokens": "Kullanabileceğin tokenler: {tokens}.",
+        "stt_off": "OpenAI ses tanıma kapalı, tarayıcının ses tanımasını kullanıyorum.",
+        "stt_failed": "Kaydı yazıya çeviremedim. Yeniden dene ya da cümleyi yaz.",
+        "stt_too_long": "Kayıt çok uzun. Daha kısa konuş ya da cümleyi yaz.",
         "live_refunded": "İade edildi. Para ajanın kendi bakiyesine döndü. Yeni bir teklif isteyebilirsin.",
         "live_refunded_part": "Kısmen tamamlandı. {amount} {symbol} aldın, kalan para ajanın kendi bakiyesine döndü. Bakiyeni kontrol et.",
         "live_failed": "Başarısız, para hareket etmedi. Yeni bir teklif isteyebilirsin.",
@@ -281,6 +289,14 @@ MESSAGES = {
         "voice_unclear": "I did not hear you clearly, so I did not count a yes. I cancelled, and nothing was sent.",
         "voice_silence": "I heard no confirmation, so I cancelled. Nothing was sent.",
         "voice_not_heard": "I did not hear your answer. Say yes or no.",
+        "repair_question": "Did you mean: {sentence}? Say yes or no.",
+        "repair_sentence": "swap {amount} {from_token} to {to_token}",
+        "repair_sentence_usd": "swap {amount} dollars of {from_token} to {to_token}",
+        "repair_no_yes": "You did not say yes, so I cancelled and asked for no quote. Say the sentence again.",
+        "supported_tokens": "Tokens you can use: {tokens}.",
+        "stt_off": "OpenAI speech recognition is off, so I am using the browser's own.",
+        "stt_failed": "I could not turn the recording into text. Try again, or type the sentence.",
+        "stt_too_long": "The recording is too long. Speak for less time, or type the sentence.",
         "live_refunded": "Refunded. The funds went back to the agent's own balance. You can ask for a new quote.",
         "live_refunded_part": "Partly done. You received {amount} {symbol}, and the rest went back to the agent's own balance. Check your balance.",
         "live_failed": "Failed, and no funds moved. You can ask for a new quote.",
@@ -452,6 +468,26 @@ def format_amount(value: str, lang: str) -> str:
 
 def say(key: str, lang: str, **values) -> str:
     return MESSAGES[lang][key].format(**values)
+
+
+# Turkish suffixes for a "did you mean" sentence. A ticker missing here is not suggested in Turkish.
+TURKISH_ACCUSATIVE_REPAIR = {**TURKISH_ACCUSATIVE, "NEAR": "NEAR'ı"}
+TURKISH_DATIVE = {"NEAR": "NEAR'a", "USDC": "USDC'ye", "USDT": "USDT'ye", "SOL": "SOL'a", "ETH": "ETH'ye", "BTC": "BTC'ye"}
+
+
+def say_repair_sentence(swap: dict, lang: str) -> str:
+    """The whole corrected sentence, as the user would say it: 0,5 NEAR'ı USDC'ye çevir."""
+    key = "repair_sentence_usd" if swap.get("unit") == "usd" else "repair_sentence"
+    source, target = swap["from_token"], swap["to_token"]
+    return say(
+        key,
+        lang,
+        amount=format_amount(swap["amount"], lang),
+        from_token=source,
+        to_token=target,
+        from_acc=TURKISH_ACCUSATIVE_REPAIR.get(source, source),
+        to_dat=TURKISH_DATIVE.get(target, target),
+    )
 
 
 def from_atomic(value: str, decimals: int) -> str:

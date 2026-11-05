@@ -389,3 +389,15 @@ def test_public_entry_point_works_with_secrets_set():
         [sys.executable, "-c", code], cwd=ROOT, env=env, capture_output=True, text=True, check=True
     )
     assert result.stdout.split() == ["False", "False", "False", "DemoGuard"]
+
+
+def test_the_public_demo_turns_off_suggestions_and_speech_to_text(public, monkeypatch):
+    from app import intent_repair, transcribe
+
+    monkeypatch.setattr(intent_repair, "llm_allowed", True)
+    monkeypatch.setattr(transcribe, "allowed", True)
+    client, _ = public(Settings())
+    assert intent_repair.llm_allowed is False
+    assert transcribe.allowed is False
+    recording = client.post("/api/transcribe?lang=tr", content=b"0" * 5000, headers={"Content-Type": "audio/webm"})
+    assert recording.status_code == 413

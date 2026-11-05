@@ -325,6 +325,10 @@ def protect(main, settings: Settings | None = None, make_transport=httpx.AsyncHT
         os.environ.pop(name, None)
     # Trade history is one local file, and every visitor here would share it.
     main.history.enabled = False
+    # Suggestions and speech to text call OpenAI outside the metered parser, so they stay off.
+    # The body limit already refuses any recording.
+    main.intent_repair.llm_allowed = False
+    main.speech.allowed = False
 
     budget = DailyBudget(settings.daily_budget_usd)
     parse = main.parse_intent
