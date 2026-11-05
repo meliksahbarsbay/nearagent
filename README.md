@@ -24,6 +24,8 @@ Swap interfaces are visual: charts, popups, and icon-only buttons. A blind user 
 - Focus is kept: after Confirm it moves to the text box, and copy buttons keep it when their list changes.
 - Live mode shows in text and without relying on colour: a `Mod: Canlı, gerçek para` line, and every button and help text warns of real money. A microphone that is listening shows the same way.
 - Voice input through the browser's Web Speech API. It uses Turkish or English to match the page, announces `Dinliyorum` and `Anladım: ...`, and writes what it heard into the text box. It never sends by itself: you check the text and press Enter.
+- Voice mode, off by default: the `Sesli mod` (`Voice mode`) button or Alt+S. While it is on, the app listens, sends what it heard, speaks the reply with the browser's own speech, and listens again. The result area stops reading aloud, so a screen reader does not speak over it, and Alt+R speaks the last reply again. `sesli modu kapat`, `stop voice mode`, Escape, or the button turns it off, and Escape also cancels a waiting quote.
+- In voice mode, live money needs the whole phrase `evet onaylıyorum` or `yes I confirm`, after the app repeats the amount and the token. A bare `evet` or `yes` is asked again. Low or missing recognition confidence (under 0.80), a refusal in any of the top three guesses, other words, 8 seconds of silence, or an expired quote cancels it. The server checks these rules too. Freezing works by voice, and unfreezing still needs the six digit code. Typed answers and the Confirm button keep the rules above.
 - An Advanced section keeps a field-based form, `POST /api/quote`, which works with no keys.
 - Dry mode by default. A dry confirmation only replies `Deneme modu: işlem yapılmadı.`
 - A quote warns once, 30 seconds before it expires, and says so again when it has. Dry quotes last 10 minutes, and live quotes last 2.
@@ -188,12 +190,13 @@ NEAR AI Cloud has not been measured on this set yet.
 - Amounts are rounded down, so a guaranteed minimum is never read out higher than it is. Very small amounts keep four significant digits, even past six decimals, or they would read as zero.
 - An answer to `how much` must be only an amount, such as `yarım`, `bir buçuk`, `50 dolar`, or `50 USDC`. A unit that is neither dollars nor one of the swap's tokens is asked again.
 - Open questions live in server memory, so a restart ends them and the page says the quote expired.
-- Tests cover the server. The page's keyboard behaviour was checked by hand in Chrome.
+- Tests cover the server, and `node --test tests/js/voice.test.cjs` covers voice mode's pure helpers. The page's keyboard behaviour was checked by hand in Chrome. Voice mode's loop has not been checked with NVDA or a real microphone yet.
 - Voice recognition was checked with a stand-in recognizer, not a real microphone. Chrome and Edge may send audio to their own speech service, unlike sentence parsing on NEAR AI Cloud.
+- Privacy in voice mode: your voice goes to the browser's speech service, which is Google's in Chrome and Microsoft's in Edge. nearagent's server never receives audio, only the recognized text. Replies are spoken by the browser's own voices, and Turkish needs a Turkish voice installed in the system.
 - Voice input follows the page language, so an English sentence on a Turkish page may be misheard. Change the language menu below the text box first.
 - Owner signing runs from a key in `.env`, not a wallet. Keep only a small amount in a dedicated owner account.
 - Freezing and unfreezing were tested with the real signer against a local stand-in API, not the real Agent API. Real timing will be slower. If the result takes more than about 30 seconds, the page says it is not known yet and never claims success.
-- A spoken `ajanı dondur` still needs Enter, because voice input never sends by itself.
+- Outside voice mode, a spoken `ajanı dondur` still needs Enter, because the microphone button never sends by itself. In voice mode it is sent at once.
 - The Agent API documents the live quote's `quote` object only loosely. The app reads `amount_out`, `min_amount_out`, and `time_estimate`. Only `amount_out` is named in the docs, so these need checking on the first real quote. If `amount_out` is missing, nothing is sent. If the minimum is missing, the app uses 1% below the quote.
 - The Agent API gave no transaction hash for the first real swap, only an intent hash that no explorer opens. After a live operation, the Identifiers section lists what it has, most specific first: a transaction link on nearblocks when there is a hash, the swap on the NEAR Intents explorer when a 1Click deposit address is known, the agent's token movements on nearblocks, and the intent hash as `Kayıt kimliği` (`Record ID`). Each link has a copy button and an `Open in explorer` link that opens a new tab. `EXPLORER_TX_URL`, `EXPLORER_INTENTS_URL`, and `EXPLORER_ACCOUNT_URL` change the link forms.
 - The first real swap, 4.9 USDC to 1.207098124 wNEAR on 5 November 2026: the agent's transfer https://nearblocks.io/txns/3szqE97UvCerjvEudipAas7Rcgz4prpDHKEMFk4KoNK5, the delivery https://nearblocks.io/txns/Gum4SfcPJsvKn4msjvir2PQ8zj9wxqappdx6jgoLRg8L, and the swap on the NEAR Intents explorer https://explorer.near-intents.org/transactions/5bd678812f52462bd516d64afd0ff4933b66cdf1388e1e0d435eafede076b952. The app did not receive the deposit address of that swap, so it showed the agent's page instead.
@@ -211,6 +214,7 @@ Not yet checked with NVDA:
 - [ ] Shortcuts: they are visible and also linked to the text box, so browse mode may read them twice.
 - [ ] Spoken replies: check that each `aria-live` reply is read aloud in full, including a repeat with Alt+R.
 - [ ] Microphone: check that speakers do not feed NVDA's voice into recognition. Headphones may be needed.
+- [ ] Voice mode: check that NVDA does not read the result area while voice mode is on, and reads it again after it is off.
 
 ## Configuration
 

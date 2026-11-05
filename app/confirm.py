@@ -31,6 +31,32 @@ def answer_word(text: str) -> Literal["yes", "no"] | None:
     return None
 
 
+# Voice mode only. Speech can mishear a short "evet", so live money needs the whole phrase.
+VOICE_YES_PHRASES = {"evet onayliyorum", "yes i confirm"}
+VOICE_MIN_CONFIDENCE = 0.80
+MAX_ALTERNATIVES = 3
+
+
+def folded_words(text: str) -> list[str]:
+    folded = text.translate(ASCII_FOLD).casefold()
+    return re.sub(r"[^\w\s]", " ", folded).split()
+
+
+def voice_confirms(text: str) -> bool:
+    """Exactly the confirmation phrase, ignoring case and punctuation."""
+    return " ".join(folded_words(text)) in VOICE_YES_PHRASES
+
+
+def voice_says_no(texts: list[str]) -> bool:
+    """A refusal heard anywhere, even in a lower-ranked alternative, is never a yes."""
+    return any(NO_WORDS & set(folded_words(text)) for text in texts)
+
+
+def voice_clear(confidence: float | None) -> bool:
+    """A browser that reports no confidence, or zero, gets no benefit of the doubt."""
+    return confidence is not None and confidence >= VOICE_MIN_CONFIDENCE
+
+
 def new_code() -> str:
     """A six digit code, read digit by digit, that only a deliberate answer can match."""
     return "".join(secrets.choice(string.digits) for _ in range(CODE_DIGITS))

@@ -3,13 +3,13 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from math import ceil
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 load_dotenv()
 
@@ -38,15 +38,20 @@ from app.live import (  # noqa: E402
     read_operation,
 )
 from app.confirm import (  # noqa: E402
+    MAX_ALTERNATIVES,
     Pending,
     PendingStore,
     answer_word,
     code_matches,
     new_code,
+    voice_clear,
+    voice_confirms,
+    voice_says_no,
 )
 from app.intent import Intent, ParserUnavailable, parse_intent  # noqa: E402
 from app.messages import (  # noqa: E402
     detect_language,
+    format_amount,
     from_atomic,
     say,
     say_assumed,
@@ -112,6 +117,12 @@ class AskInput(BaseModel):
     pending: str | None = None
     lang: Literal["tr", "en"] | None = None
     live: bool = False
+    # Set only by voice mode. Typed answers and the Confirm button never send these.
+    voice: bool = False
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    alternatives: list[Annotated[str, Field(max_length=MAX_SENTENCE)]] = Field(
+        default_factory=list, max_length=MAX_ALTERNATIVES
+    )
 
 
 class ModeInput(BaseModel):
@@ -539,8 +550,91 @@ async def run_command(command: str, lang: str, text: str = "", live: bool = Fals
     return {"action": command, "language": lang, "spoken": spoken}
 
 
+def voice_question(item: Pending) -> str:
+    """Repeat the amount and token, then name the whole phrase that confirms."""
+    order, lang = item.order, item.lang
+    if isinstance(order, WithdrawOrder):
+        return say("voice_confirm_withdraw", lang, amount=format_amount(order.amount_text, lang), symbol=order.symbol)
+    destination = order.destination
+    return say(
+        "voice_confirm_swap",
+        lang,
+        give=format_amount(order.amount_in_text, lang),
+        symbol_in=order.origin["symbol"],
+        min_out=format_amount(from_atomic(order.min_out, destination["decimals"]), lang),
+        symbol_out=destination["symbol"],
+    )
+
+
+def voiced_offer(result):
+    """A live offer heard in voice mode ends with the spoken phrase, not with type yes."""
+    if not isinstance(result, dict) or result.get("mode") != "live" or not result.get("pending"):
+        return result
+    item = pendings.get(result["pending"])
+    if item is None or not item.live or item.order is None:
+        return result
+    _, question = confirm_question(item.order.usd, item.lang, True)
+    spoken = result["spoken"]
+    if spoken.endswith(question):
+        spoken = spoken[: -len(question)].rstrip()
+    return {**result, "spoken": f"{spoken} {voice_question(item)}"}
+
+
+async def answer_voice(data: AskInput, text: str, lang: str) -> dict | JSONResponse | None:
+    """Stricter answers for live money heard by voice. None leaves the answer to the usual path.
+
+    Every doubt cancels: a refusal in any alternative, silence, low or missing confidence,
+    or any words but the whole phrase. A bare yes is asked once more.
+    """
+    key = data.pending
+    item = pendings.get(key)
+    if item is None:
+        return None
+    if not item.live or item.kind not in ("confirm", "large"):
+        # Silence must never reach the usual path, where an empty answer confirms a dry quote.
+        if not text and item.kind in ("confirm", "large"):
+            return ask_again(item, key, "voice_not_heard")
+        return None
+    if voice_says_no([text, *data.alternatives]):
+        pendings.drop(key)
+        return reply("cancelled", "cancelled" if answer_word(text) == "no" else "voice_unclear", item.lang)
+    if not text:
+        pendings.drop(key)
+        return reply("cancelled", "voice_silence", item.lang)
+    if not voice_clear(data.confidence):
+        pendings.drop(key)
+        return reply("cancelled", "voice_unclear", item.lang)
+    if not voice_confirms(text):
+        if answer_word(text) == "yes":
+            return ask_again(item, key, "voice_needs_phrase")
+        pendings.drop(key)
+        return reply("cancelled", "voice_unclear", item.lang)
+    if item.kind == "large":
+        item.kind = "confirm"
+        return {**ask_again(item, key, "voice_needs_phrase"), "spoken": voice_question(item)}
+    pendings.drop(key)
+    return voiced_offer(await run_live(item))
+
+
 @app.post("/api/ask")
 async def ask(data: AskInput, client: OneClick = Depends(get_oneclick)):
+    if data.voice:
+        return voiced_offer(await ask_by_voice(data, client))
+    return await answer_ask(data, client)
+
+
+async def ask_by_voice(data: AskInput, client: OneClick):
+    text = data.text.strip()
+    command = detect_command(text) if len(text) <= MAX_SENTENCE else None
+    if data.pending and not (command and command[0] == "freeze"):
+        lang = data.lang or detect_language(text)
+        answered = await answer_voice(data, text, lang)
+        if answered is not None:
+            return answered
+    return await answer_ask(data, client)
+
+
+async def answer_ask(data: AskInput, client: OneClick):
     text = data.text.strip()
     command = detect_command(text) if len(text) <= MAX_SENTENCE else None
     # The emergency stop never waits behind an open question. The words are the approval.

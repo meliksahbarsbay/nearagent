@@ -32,6 +32,11 @@ const TEXT = {
     help:
       "Bir cümle yaz ve Enter'a bas, örneğin 2 NEAR'ı USDC'ye çevir. Teklif okununca Enter ya da evet onaylar, Esc ya da hayır iptal eder. Alt M mikrofonu açar. Alt R son cevabı tekrar okur. Komutlar: cüzdanımda ne var, son işlemlerimi oku, paramı cüzdanıma çek, politikamı oku, bütçem ne kadar kaldı, ajanı dondur, ajanı çöz.",
     mic: "Mikrofon",
+    voice: "Sesli mod",
+    voiceOn: "Sesli mod açık. Konuş, dinliyorum. Çıkmak için sesli modu kapat de ya da Esc'ye bas.",
+    voiceOff: "Sesli mod kapandı.",
+    voiceIdle: "Uzun süre ses gelmedi, sesli modu kapattım.",
+    voiceUnsupported: "Bu tarayıcı sesli modu desteklemiyor, Chrome ya da Edge kullan.",
     confirm: "Onayla, gerçek para",
     live: "Canlı mod",
     listening: "Dinliyorum",
@@ -95,6 +100,11 @@ const TEXT = {
     help:
       "Type a sentence and press Enter, for example swap 2 NEAR to USDC. After a quote, Enter or yes confirms, and Escape or no cancels. Alt M turns on the microphone. Alt R repeats the last reply. Commands: what is my balance, read my recent trades, withdraw to my wallet, read my policy, how much budget is left, freeze the agent, unfreeze the agent.",
     mic: "Microphone",
+    voice: "Voice mode",
+    voiceOn: "Voice mode is on. Speak, I am listening. To leave, say stop voice mode or press Escape.",
+    voiceOff: "Voice mode is off.",
+    voiceIdle: "I heard nothing for a while, so I turned voice mode off.",
+    voiceUnsupported: "This browser does not support voice mode. Use Chrome or Edge.",
     confirm: "Confirm, real money",
     live: "Live mode",
     listening: "Listening",
@@ -157,6 +167,19 @@ let quoteTimers = [];
 let announceTimer = 0;
 let liveMode = false;
 let listening = null;
+let pendingLive = false;
+// Voice mode is off until the user turns it on, and then every reply is also spoken.
+const voice = window.NearVoice.createVoiceMode({
+  locale: () => SPEECH_LOCALES[language],
+  busy: () => Boolean(controller),
+  livePending: () => Boolean(pending && pendingLive),
+  showListening: (on) => showListening(on),
+  sendVoice: (heard) => {
+    sentence.value = heard.text;
+    ask(heard.text, { voice: true, confidence: heard.confidence, alternatives: heard.alternatives });
+  },
+  stopped: (reason) => stopVoice(reason),
+});
 
 function announce(message) {
   // Emptying first makes a repeated sentence count as a change for screen readers.
@@ -165,6 +188,8 @@ function announce(message) {
   announceTimer = window.setTimeout(() => {
     result.textContent = message;
   }, ANNOUNCE_DELAY_MS);
+  // The result area is silent in voice mode, so the app's own voice reads it instead.
+  if (voice.on && message !== TEXT[language].busy) voice.speak(message);
 }
 
 // Focus returns to the same identifier, else the same place, and last to the text box.
@@ -254,6 +279,7 @@ function applyLanguage(next) {
   byId("to-label").textContent = text.to;
   byId("amount-label").textContent = text.amount;
   byId("mic").textContent = text.mic;
+  byId("voice-toggle").textContent = text.voice;
   byId("confirm").textContent = text.confirm;
   byId("live-toggle").textContent = text.live;
   byId("mic-state").textContent = text.micOn;
@@ -371,6 +397,7 @@ async function send(path, body, button) {
     });
     const data = await response.json();
     pending = data.pending || null;
+    pendingLive = Boolean(pending && data.confirm_button);
     if (data.expires_in) startQuoteTimers(data.expires_in);
     else if (!pending) clearQuoteTimers();
     const confirmButton = byId("confirm");
@@ -382,8 +409,9 @@ async function send(path, body, button) {
     if (data.language in TEXT) applyLanguage(data.language);
     if (response.ok || pending) sentence.value = "";
     // Answers go in the text box, so a question from the form moves focus there.
-    if (pending) sentence.focus();
-    if (data.field) markField(data.field);
+    // In voice mode focus stays put, because a screen reader would talk over the reply.
+    if (pending && !voice.on) sentence.focus();
+    if (data.field && !voice.on) markField(data.field);
     lastReply = data.spoken || TEXT[language].failed;
     announce(lastReply);
     if (data.track) followSwap(data.track);
@@ -392,11 +420,14 @@ async function send(path, body, button) {
   } finally {
     controller = null;
     button.removeAttribute("aria-disabled");
+    // A reply that could not be spoken must not leave voice mode deaf.
+    if (voice.on) voice.listenSoon();
   }
 }
 
-function ask(text) {
-  const body = { text, lang: language, live: liveMode };
+// Only voice mode adds voice fields. Typed answers and the Confirm button never do.
+function ask(text, voiceFields) {
+  const body = { text, lang: language, live: liveMode, ...voiceFields };
   if (pending) body.pending = pending;
   send("api/ask", body, byId("ask-submit"));
 }
@@ -473,7 +504,47 @@ function toggleListening() {
   }
 }
 
+function startVoice() {
+  const text = TEXT[language];
+  if (!voice.supported()) {
+    announce(text.voiceUnsupported);
+    return;
+  }
+  if (listening) listening.abort();
+  byId("voice-toggle").setAttribute("aria-pressed", "true");
+  // The app speaks every reply now, so the screen reader must not read it a second time.
+  result.setAttribute("aria-live", "off");
+  window.clearTimeout(announceTimer);
+  result.textContent = text.voiceOn;
+  voice.start(text.voiceOn);
+}
+
+// Leaving voice mode gives the result area back to the screen reader before it speaks.
+function stopVoice(reason, cancelPending = false) {
+  voice.stop();
+  showListening(false);
+  byId("voice-toggle").setAttribute("aria-pressed", "false");
+  result.setAttribute("aria-live", "polite");
+  if (cancelPending && pending) {
+    ask("iptal");
+    return;
+  }
+  announce(TEXT[language][reason] || TEXT[language].voiceOff);
+}
+
+function toggleVoice() {
+  if (voice.on) stopVoice("voiceOff");
+  else startVoice();
+}
+
 function cancel() {
+  // Escape in voice mode always leaves it, and cancels a waiting quote too.
+  if (voice.on) {
+    // A request in flight is stopped like today. Otherwise a waiting quote is cancelled.
+    if (controller) controller.abort();
+    stopVoice("voiceOff", !controller);
+    return;
+  }
   if (listening) {
     listening.abort();
     announce(TEXT[language].voiceStopped);
@@ -509,7 +580,12 @@ byId("quote-form").addEventListener("submit", (event) => {
   );
 });
 
-byId("mic").addEventListener("click", toggleListening);
+byId("mic").addEventListener("click", () => {
+  // In voice mode the microphone opens again on its own. The button just opens it now.
+  if (voice.on) voice.listenSoon();
+  else toggleListening();
+});
+byId("voice-toggle").addEventListener("click", toggleVoice);
 byId("confirm").addEventListener("click", () => ask("evet"));
 byId("live-toggle").addEventListener("click", () => setLiveMode(!liveMode));
 
@@ -540,7 +616,11 @@ document.addEventListener("keydown", (event) => {
     announce(liveMode ? TEXT[language].helpLive : TEXT[language].help);
   } else if (key === "m") {
     event.preventDefault();
-    toggleListening();
+    if (voice.on) voice.listenSoon();
+    else toggleListening();
+  } else if (key === "s") {
+    event.preventDefault();
+    toggleVoice();
   }
 });
 
