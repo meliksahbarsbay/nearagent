@@ -49,6 +49,7 @@ from app.confirm import (  # noqa: E402
     voice_says_no,
 )
 from app.intent import Intent, ParserUnavailable, parse_intent  # noqa: E402
+from app.voice_text import amount_answer, normalize_voice  # noqa: E402
 from app.messages import (  # noqa: E402
     detect_language,
     format_amount,
@@ -624,7 +625,12 @@ async def ask(data: AskInput, client: OneClick = Depends(get_oneclick)):
 
 
 async def ask_by_voice(data: AskInput, client: OneClick):
-    text = data.text.strip()
+    # Speech writes numbers and token names its own way. Typed text never comes through here.
+    text = normalize_voice(data.text.strip())
+    waiting = pendings.get(data.pending) if data.pending else None
+    if waiting is not None and waiting.kind == "amount":
+        text = amount_answer(text)
+    data = data.model_copy(update={"text": text})
     command = detect_command(text) if len(text) <= MAX_SENTENCE else None
     if data.pending and not (command and command[0] == "freeze"):
         lang = data.lang or detect_language(text)
