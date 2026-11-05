@@ -66,6 +66,11 @@
     <details>
       <summary id="advanced-summary"></summary>
       <button type="button" id="live-toggle" aria-pressed="false"></button>
+      <label for="stt" id="stt-label"></label>
+      <select id="stt">
+        <option value="browser" id="stt-browser"></option>
+        <option value="openai" id="stt-openai"></option>
+      </select>
       <form id="quote-form" novalidate>
         <label for="from-token" id="from-label"></label>
         <input id="from-token" autocomplete="off" spellcheck="false" value="NEAR">
@@ -80,7 +85,7 @@
       </form>
     </details>
   </main>
-  <script src="voice.js?v=3"></script>
-  <script src="app.js?v=3"></script>
+  <script src="voice.js?v=4"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>

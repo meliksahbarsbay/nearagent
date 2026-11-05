@@ -78,3 +78,25 @@ test("the recognizer asks for three alternatives and waits eight seconds", () =>
   assert.equal(voice.ALTERNATIVES, 3);
   assert.equal(voice.SILENCE_MS, 8000);
 });
+
+test("dictation pieces get a space between them, never glued", () => {
+  assert.equal(voice.joinParts(["0.5 New usd'ye çevir", "near"]), "0.5 New usd'ye çevir near");
+  assert.equal(voice.mergeDictation("çevir", "near"), "çevir near");
+});
+
+test("a dictation piece that repeats is written once", () => {
+  assert.equal(voice.joinParts(["yarım NEAR", "yarım NEAR"]), "yarım NEAR");
+  assert.equal(voice.mergeDictation("yarım NEAR'ı USDC'ye çevir", "çevir"), "yarım NEAR'ı USDC'ye çevir");
+  assert.equal(voice.mergeDictation("swap", "swap 2 NEAR to USDC"), "swap 2 NEAR to USDC");
+});
+
+test("dictation into an empty box, and empty pieces, change nothing else", () => {
+  assert.equal(voice.mergeDictation("", "  bir   NEAR "), "bir NEAR");
+  assert.equal(voice.mergeDictation("bir NEAR", ""), "bir NEAR");
+  assert.equal(voice.joinParts([]), "");
+});
+
+test("the recorder tells speech from silence by level", () => {
+  assert.equal(voice.level(new Float32Array(10)), 0);
+  assert.ok(voice.level(Float32Array.from({ length: 10 }, () => 0.1)) > 0.015);
+});

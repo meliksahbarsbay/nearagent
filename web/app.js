@@ -37,6 +37,13 @@ const TEXT = {
     voiceOff: "Sesli mod kapandı.",
     voiceIdle: "Uzun süre ses gelmedi, sesli modu kapattım.",
     voiceUnsupported: "Bu tarayıcı sesli modu desteklemiyor, Chrome ya da Edge kullan.",
+    stt: "Ses tanıma",
+    sttBrowser: "Tarayıcı, Chrome'da Google",
+    sttOpenai: "OpenAI",
+    sttSetBrowser: "Ses tanıma tarayıcıda. Chrome'da ses Google'a gider.",
+    sttSetOpenai: "Ses tanıma OpenAI. Kayıt OpenAI'ye gider.",
+    recordingStarted: "Kayıt başladı, konuş. Bitince sus.",
+    recordingDone: "Kayıt bitti, yazıya çeviriyorum.",
     confirm: "Onayla, gerçek para",
     live: "Canlı mod",
     listening: "Dinliyorum",
@@ -105,6 +112,13 @@ const TEXT = {
     voiceOff: "Voice mode is off.",
     voiceIdle: "I heard nothing for a while, so I turned voice mode off.",
     voiceUnsupported: "This browser does not support voice mode. Use Chrome or Edge.",
+    stt: "Speech recognition",
+    sttBrowser: "Browser, Google in Chrome",
+    sttOpenai: "OpenAI",
+    sttSetBrowser: "Speech recognition is in the browser. In Chrome, audio goes to Google.",
+    sttSetOpenai: "Speech recognition is OpenAI. Recordings go to OpenAI.",
+    recordingStarted: "Recording. Speak, then stop talking.",
+    recordingDone: "Recording done, turning it into text.",
     confirm: "Confirm, real money",
     live: "Live mode",
     listening: "Listening",
@@ -168,10 +182,18 @@ let announceTimer = 0;
 let liveMode = false;
 let listening = null;
 let pendingLive = false;
+// What the microphone last wrote into the box. Sent as dictation only while it is unchanged.
+let dictated = "";
+// Browser speech by default. OpenAI only when chosen under Advanced.
+let sttEngine = readSetting("stt") === "openai" ? "openai" : "browser";
 // Voice mode is off until the user turns it on, and then every reply is also spoken.
 const voice = window.NearVoice.createVoiceMode({
   locale: () => SPEECH_LOCALES[language],
+  lang: () => language,
+  engine: () => sttEngine,
+  engineFailed: (spoken) => useBrowserSpeech(spoken),
   busy: () => Boolean(controller),
+  // A live quote and a "did you mean" both need an answer, so silence cancels them.
   livePending: () => Boolean(pending && pendingLive),
   showListening: (on) => showListening(on),
   sendVoice: (heard) => {
@@ -180,6 +202,34 @@ const voice = window.NearVoice.createVoiceMode({
   },
   stopped: (reason) => stopVoice(reason),
 });
+
+function readSetting(name) {
+  try {
+    return window.localStorage.getItem(`nearagent.${name}`);
+  } catch {
+    return null;
+  }
+}
+
+function saveSetting(name, value) {
+  try {
+    window.localStorage.setItem(`nearagent.${name}`, value);
+  } catch {
+    // A private window keeps the choice for this page only.
+  }
+}
+
+function setSttEngine(next, spoken) {
+  sttEngine = next;
+  byId("stt").value = next;
+  saveSetting("stt", next);
+  announce(spoken || TEXT[language][next === "openai" ? "sttSetOpenai" : "sttSetBrowser"]);
+}
+
+// OpenAI is off or failed, so the browser's speech takes over and the user hears why.
+function useBrowserSpeech(spoken) {
+  setSttEngine("browser", spoken);
+}
 
 function announce(message) {
   // Emptying first makes a repeated sentence count as a change for screen readers.
@@ -275,6 +325,9 @@ function applyLanguage(next) {
   byId("result-heading").textContent = text.heading;
   byId("advanced-summary").textContent = text.advanced;
   byId("lang-label").textContent = text.lang;
+  byId("stt-label").textContent = text.stt;
+  byId("stt-browser").textContent = text.sttBrowser;
+  byId("stt-openai").textContent = text.sttOpenai;
   byId("from-label").textContent = text.from;
   byId("to-label").textContent = text.to;
   byId("amount-label").textContent = text.amount;
@@ -397,7 +450,7 @@ async function send(path, body, button) {
     });
     const data = await response.json();
     pending = data.pending || null;
-    pendingLive = Boolean(pending && data.confirm_button);
+    pendingLive = Boolean(pending && (data.confirm_button || data.answer_required));
     if (data.expires_in) startQuoteTimers(data.expires_in);
     else if (!pending) clearQuoteTimers();
     const confirmButton = byId("confirm");
@@ -459,10 +512,51 @@ function stopListening() {
   listening = null;
 }
 
+// Adds to the box with a space, and remembers it, so the server knows it was dictated.
+function writeDictation(heard) {
+  sentence.value = window.NearVoice.mergeDictation(sentence.value, heard);
+  dictated = sentence.value;
+  sentence.focus();
+}
+
+// The microphone with OpenAI: record, then send the clip. Start and end are announced.
+function dictateWithRecorder() {
+  const text = TEXT[language];
+  const session = window.NearVoice.createRecorder({ lang: language });
+  let finished = false;
+  session.onrecorded = () => announce(text.recordingDone);
+  session.onresult = (event) => {
+    finished = true;
+    if (!event.parsed.text) {
+      announce(text.noSpeech);
+      return;
+    }
+    writeDictation(event.parsed.text);
+    announce(`${text.heard} ${sentence.value}`);
+  };
+  session.onerror = (event) => {
+    finished = true;
+    if (event.error === "stt-off" || event.error === "stt-failed") useBrowserSpeech(event.spoken);
+    else announce(text[VOICE_ERRORS[event.error] || "voiceFailed"]);
+  };
+  session.onend = () => {
+    stopListening();
+    if (!finished) announce(text.noSpeech);
+  };
+  listening = session;
+  showListening(true);
+  announce(text.recordingStarted);
+  session.start();
+}
+
 function toggleListening() {
   const text = TEXT[language];
   if (listening) {
     listening.stop();
+    return;
+  }
+  if (sttEngine === "openai" && window.NearVoice.recorderSupported()) {
+    dictateWithRecorder();
     return;
   }
   if (!Recognition) {
@@ -482,8 +576,9 @@ function toggleListening() {
   session.onresult = (event) => {
     finished = true;
     // Written to the box and never sent: the user checks it, then presses Enter.
-    sentence.value = event.results[0][0].transcript.trim();
-    sentence.focus();
+    const parts = [];
+    for (let index = 0; index < event.results.length; index += 1) parts.push(event.results[index][0].transcript);
+    writeDictation(window.NearVoice.joinParts(parts));
     announce(`${text.heard} ${sentence.value}`);
   };
   session.onerror = (event) => {
@@ -547,6 +642,8 @@ function cancel() {
   }
   if (listening) {
     listening.abort();
+    // A recording that was stopped ends no session of its own, so it is cleared here.
+    stopListening();
     announce(TEXT[language].voiceStopped);
   } else if (controller) {
     controller.abort();
@@ -562,8 +659,13 @@ function cancel() {
 
 byId("ask-form").addEventListener("submit", (event) => {
   event.preventDefault();
-  ask(sentence.value);
+  // Text the user typed or changed is sent as typed, and the server leaves it as it is.
+  const fromMicrophone = Boolean(dictated) && sentence.value === dictated;
+  dictated = "";
+  ask(sentence.value, fromMicrophone ? { source: "dictation" } : undefined);
 });
+
+byId("stt").addEventListener("change", () => setSttEngine(byId("stt").value));
 
 byId("quote-form").addEventListener("submit", (event) => {
   event.preventDefault();
@@ -629,3 +731,4 @@ langSelect.addEventListener("change", () => {
   announce(TEXT[language].languageSet);
 });
 applyLanguage(language);
+byId("stt").value = sttEngine;
