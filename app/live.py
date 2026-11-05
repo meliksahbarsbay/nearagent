@@ -6,6 +6,7 @@ limits come on top of the owner's signed policy, and any doubt stops the swap.
 """
 import asyncio
 import json
+import logging
 import os
 import re
 import secrets
@@ -37,6 +38,8 @@ from app.oneclick import (
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_LEDGER = ROOT / "data" / "live_spend.json"
+log = logging.getLogger("nearagent.live")
+
 DEFAULT_MAX_USD = "5"
 DEFAULT_MAX_DAILY_USD = "10"
 DAY_SECONDS = 86_400
@@ -90,9 +93,10 @@ SPOKEN_REFUSALS = {
     "policy_action_limit_exceeded": "live_budget",
     "spend_price_unavailable": "live_no_price",
     "wallet_busy": "live_busy",
-    "route_unavailable": "quote_rejected",
-    "provider_refused": "quote_rejected",
-    "amount_too_low": "quote_rejected",
+    # The API names no minimum, so a low amount cannot be read out as a number.
+    "route_unavailable": "live_no_route",
+    "provider_refused": "live_no_route",
+    "amount_too_low": "live_too_low",
     "provider_unavailable": "upstream",
     "unsupported_token": "live_refused",
 }
@@ -252,6 +256,8 @@ def client() -> AgentApi:
 
 
 def refusal(error: AgentApiError) -> QuoteError:
+    # The code and request id are not secret, and without them a refusal cannot be explained later.
+    log.warning("agent refused: %s %s (request %s)", error.status, error.code, error.request_id)
     status = error.status if 400 <= error.status < 500 else 502
     return QuoteError(SPOKEN_REFUSALS.get(error.code, "live_refused"), status)
 
@@ -306,7 +312,8 @@ def read_quote(data: dict) -> dict:
     if not isinstance(minimum, str) or not minimum.isdigit():
         floor = (Decimal(amount_out) * (1 - DEFAULT_SLIPPAGE)).to_integral_value(ROUND_DOWN)
         minimum = str(floor)
-    seconds = quote.get("time_estimate")
+    # The first real quote named it time_estimate_seconds. The older name is still read.
+    seconds = quote.get("time_estimate_seconds", quote.get("time_estimate"))
     return {
         "amount_out": amount_out,
         "min_out": minimum,

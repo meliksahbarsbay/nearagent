@@ -40,6 +40,7 @@ class FakeAgent:
         self.fee = {"amount_usd": "0.02", "percent": "0.5"}
         self.warnings = []
         self.quote_error = None
+        self.quote_extra = {}
         self.swap_replies = []
         self.status_replies = []
         self.transport = httpx.MockTransport(self.handle)
@@ -95,6 +96,7 @@ class FakeAgent:
             quote["min_amount_out"] = self.min_out
         if self.time_estimate is not None:
             quote["time_estimate"] = self.time_estimate
+        quote.update(self.quote_extra)
         return httpx.Response(
             200,
             json={
@@ -240,6 +242,42 @@ def test_missing_time_is_said_plainly(agent):
     agent.time_estimate = None
     client, _ = make_client()
     assert "Süre bilgisi yok." in offer(client)["spoken"]
+
+
+def test_time_is_read_under_the_name_the_real_api_uses(agent):
+    """The first real quote said time_estimate_seconds, not time_estimate."""
+    agent.time_estimate = None
+    agent.quote_extra = {"time_estimate_seconds": 12}
+    client, _ = make_client()
+    spoken = offer(client)["spoken"]
+    assert "Süre: yaklaşık 12 saniye." in spoken
+    assert "Süre bilgisi yok." not in spoken
+
+
+@pytest.mark.parametrize(
+    "code, spoken",
+    [
+        ("route_unavailable", "Şu an bu takas için yol bulunamadı, işlem yapılmadı. Biraz sonra yeniden dene ya da başka bir token dene."),
+        ("provider_refused", "Şu an bu takas için yol bulunamadı, işlem yapılmadı. Biraz sonra yeniden dene ya da başka bir token dene."),
+        ("amount_too_low", "Bu tutar takas için çok düşük, işlem yapılmadı. Daha yüksek bir miktar dene."),
+    ],
+)
+def test_a_refused_quote_says_why(agent, code, spoken):
+    agent.quote_error = (409, code)
+    client, _ = make_client()
+    data = offer(client)
+    assert data["spoken"] == spoken
+    assert "pending" not in data
+    assert agent.live_swaps() == []
+
+
+def test_a_refusal_code_is_logged_without_secrets(agent, caplog):
+    agent.quote_error = (409, "route_unavailable")
+    client, _ = make_client()
+    with caplog.at_level("WARNING", logger="nearagent.live"):
+        offer(client)
+    assert "route_unavailable" in caplog.text
+    assert "naa_test" not in caplog.text and "ngt_test" not in caplog.text
 
 
 def test_high_fee_is_warned(agent):
