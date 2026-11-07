@@ -108,8 +108,8 @@ The signing approach follows the Agent API documentation and its examples. That 
 
 ## How NEAR is used
 
-- NEAR AI Cloud is the first provider for parsing sentences, for `did you mean` suggestions with `z-ai/glm-5.3-flash`, and for speech to text with `openai/whisper-large-v3`, through its OpenAI-compatible API at `https://cloud-api.near.ai/v1`. If NEAR AI fails or is silent for 8 seconds, OpenAI takes the same suggestion or recording, and the server log names the service, the model, the time, and whether the backup was used, never a key or the sentence. Both models were checked in NEAR AI's model list on 5 November 2026, but nothing has run with a NEAR AI key yet. `REPAIR_PROVIDER` and `TRANSCRIBE_PROVIDER` can put OpenAI first. The page shows `Kullanılan sağlayıcı` (`Provider in use`) under Advanced, and a switch to the backup is announced.
-- NEAR AI Cloud parses sentences through its OpenAI-compatible API. The default model is `z-ai/glm-5.3-flash`, listed as Private TEE. OpenAI is the fallback, used when the NEAR AI key is missing or NEAR AI fails.
+- NEAR AI Cloud is the first provider for parsing sentences, for `did you mean` suggestions with `z-ai/glm-5.3-flash`, and for speech to text with `openai/whisper-large-v3`, through its OpenAI-compatible API at `https://cloud-api.near.ai/v1`. If NEAR AI fails or is silent for 8 seconds, OpenAI takes the same suggestion or recording, and the server log names the service, the model, the time, and whether the backup was used, never a key or the sentence. Both models were checked in NEAR AI's model list on 5 November 2026. Sentence parsing ran with a NEAR AI key on 7 November 2026, and the result is under `Parser evaluation`. Suggestions and speech to text have not run with it yet. `REPAIR_PROVIDER` and `TRANSCRIBE_PROVIDER` can put OpenAI first. The page shows `Kullanılan sağlayıcı` (`Provider in use`) under Advanced, and a switch to the backup is announced.
+- NEAR AI Cloud parses sentences through its OpenAI-compatible API. The default model is `z-ai/glm-5.3-flash`, listed as Private TEE. OpenAI is the fallback, used when the NEAR AI key is missing or NEAR AI fails. For parsing, NEAR AI gets 30 seconds before OpenAI takes over.
 - NEAR Intents 1Click API supplies token data, prices, and quotes in dry mode, always with `INTENTS` for `depositType`, `refundType`, and `recipientType`.
 - The NEAR Intents Agent API runs live swaps from a policy-bound agent wallet, which holds its funds in its own NEAR Intents account.
 
@@ -175,7 +175,7 @@ See: JSON with `"mode":"dry"`, a `spoken` sentence, a `quote` object, a `correla
 
 Latest result with OpenAI `gpt-6-luna`: 44 of 44, in three runs in a row. Earlier runs showed sentences that failed some of the time, and the prompt and code rules were changed after seeing those failures, so this score is not from unseen data. Code decides three things the model got wrong at times: a chain after Turkish `Solana'da` is the source, amounts are read in code, and `50 dolar kaç SOL` is a question, not an offer.
 
-NEAR AI Cloud has not been measured on this set yet.
+NEAR AI Cloud with `z-ai/glm-5.3-flash`, one run on 7 November 2026: 44 of 44 through the app's parser. NEAR AI answered 43 itself. One request, `50 dolar kaç SOL`, reached the 30 second parsing timeout, and the OpenAI backup answered it correctly. NEAR AI's answers took 4.0 seconds on average, 2.8 at the median, and 13.8 at most. Three took longer than 8 seconds. The run used about 24,000 input tokens and 8,400 output tokens, about 0.006 dollars at NEAR AI's listed price. This is the same set that shaped the prompt, so it is not unseen data either.
 
 ## Known limits
 
