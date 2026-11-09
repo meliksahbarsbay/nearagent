@@ -19,6 +19,8 @@ def local_files(monkeypatch, tmp_path, request):
     if request.node.get_closest_marker("live") is None:
         for name in PROVIDER_SETTINGS:
             monkeypatch.delenv(name, raising=False)
+    # A test that reaches the real data/ folder fails (see app/local_data.py).
+    monkeypatch.setenv("NEARAGENT_MOCK", "1")
     monkeypatch.setenv("HISTORY_PATH", str(tmp_path / "history.json"))
     monkeypatch.setenv("LIVE_LEDGER_PATH", str(tmp_path / "spend.json"))
     # The public guard turns history off for the whole process, so each test starts on.

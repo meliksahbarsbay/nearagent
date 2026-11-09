@@ -190,7 +190,7 @@ NEAR AI Cloud for `did you mean` and speech to text, one short run on 9 November
 - A number counts only when a token or a dollar word follows it, so `bir` as a plain word is not read as an amount. A number with no such word falls back to what the language model read.
 - A sentence that buys without saying how to pay uses USDC, and the quote says so.
 - Dollar amounts use the token's current list price, so the real value can differ slightly. In dry mode a bought amount uses `EXACT_OUTPUT`. The Agent API takes an exact input only, so in live mode every amount becomes the input that matches it at the current price.
-- Trade history is stored in `data/history.json` on this computer. It is a convenience, and the Agent API holds the real record of a live swap. A swap still running when the app restarts stays marked as processing.
+- Trade history is stored in `data/history.json` on this computer. It is a convenience, and the Agent API holds the real record of a live swap. A swap still running when the app restarts stays marked as processing. Tests and mock runs (`NEARAGENT_MOCK=1`) cannot use the real `data/` folder; they fail instead. This was added after a mock run on 9 November wrote a fake withdrawal there.
 - Reading the wallet works against the real Agent API from the terminal, with `python scripts/owner_setup.py balance`. The page's wallet reply was tested against a stand-in.
 - Some quotes fail upstream with no specific reason. In live mode the Agent API's code decides the sentence: no route, or an amount too low. The API names no minimum, so none is read out. The code is written to the server log.
 - Prices come from the 1Click token list, so they may be a few minutes old.

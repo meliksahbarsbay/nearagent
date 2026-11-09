@@ -26,6 +26,7 @@ from app.agent_api import (
 )
 from app.amounts import find_amount, first_number, named_tokens, says_all, tokenize
 from app.history import history
+from app.local_data import checked
 from app.messages import withdraw_symbol
 from app.oneclick import (
     CHAIN_NAMES,
@@ -206,7 +207,7 @@ class SpendLedger:
     """The last 24 hours of live spending, kept on disk so a restart cannot reset it."""
 
     def path(self) -> Path:
-        return Path(os.getenv("LIVE_LEDGER_PATH") or DEFAULT_LEDGER)
+        return checked(Path(os.getenv("LIVE_LEDGER_PATH") or DEFAULT_LEDGER))
 
     def _read(self) -> list[dict]:
         path = self.path()

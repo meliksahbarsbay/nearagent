@@ -10,6 +10,8 @@ import secrets
 from datetime import datetime, timezone
 from pathlib import Path
 
+from app.local_data import checked
+
 log = logging.getLogger("nearagent.history")
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -22,7 +24,7 @@ class History:
     enabled = True
 
     def path(self) -> Path:
-        return Path(os.getenv("HISTORY_PATH") or DEFAULT_PATH)
+        return checked(Path(os.getenv("HISTORY_PATH") or DEFAULT_PATH))
 
     def _read(self) -> list[dict]:
         path = self.path()
