@@ -259,6 +259,62 @@ def test_with_no_key_the_rules_still_suggest(monkeypatch):
     assert len(sent) == 1
 
 
+@pytest.fixture
+def without_parser(monkeypatch):
+    async def no_parser(text):
+        raise ParserUnavailable
+
+    monkeypatch.setattr(main, "parse_intent", no_parser)
+
+
+@pytest.mark.parametrize("text, language", [
+    ("swap 1 NEAR to USDC", "en"),
+    ("Swap 0.5 sol into usdc.", "en"),
+    ("convert 2 NEAR to USDC", "en"),
+    ("1 NEAR'ı USDC'ye çevir", "tr"),
+    ("0,5 SOL'u USDC'ye çevir", "tr"),
+])
+def test_with_no_key_a_well_formed_swap_goes_straight_to_its_quote(without_parser, text, language):
+    client, sent = make_client()
+    data = ask(client, text)
+    assert data["action"] == "swap"
+    assert data["language"] == language
+    assert not data["spoken"].startswith(("Did you mean", "Bunu mu demek istedin"))
+    assert len(sent) == 1
+
+
+@pytest.mark.parametrize("text", [
+    GARBLED_TR,                     # a misheard token
+    "swap 1 new to usd",            # misheard, in English
+    "swap 2 NEAR to USDC on Base",  # a chain the rules cannot carry
+    "swap 1.000 NEAR to USDC",      # one or a thousand
+    "swap 1 NEAR to NEAR",          # not a swap
+    "I want to swap 1 NEAR to USDC maybe",
+])
+def test_with_no_key_anything_else_still_asks_first(without_parser, text):
+    client, sent = make_client()
+    data = ask(client, text)
+    assert data.get("action") != "swap"
+    assert sent == []
+
+
+def test_the_well_formed_check_reads_only_exact_tickers():
+    allowed = intent_repair.supported(False)
+    assert intent_repair.well_formed("swap 1 NEAR to USDC", "en", allowed) == {
+        "from_token": "NEAR", "to_token": "USDC", "amount": "1"}
+    assert intent_repair.well_formed("swap 1 XRP to USDC", "en", allowed) is None
+    assert intent_repair.well_formed("swap 1 BTC to USDC", "en", intent_repair.supported(True)) is None
+
+
+def test_a_well_formed_live_swap_still_needs_its_confirmation(agent, without_parser):
+    client, _ = make_client()
+    offer = ask(client, "swap 1 NEAR to USDC", live=True)
+    assert offer["mode"] == "live"
+    assert offer["confirm_button"] is True
+    assert agent.live_swaps() == []
+    assert live.ledger.total() == 0
+
+
 # Live money
 
 

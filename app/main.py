@@ -820,7 +820,13 @@ async def answer_ask(data: AskInput, client: OneClick):
         try:
             intent = await parse_intent(text)
         except ParserUnavailable:
-            # With no key, the rules alone may still read the sentence. They suggest, never quote.
+            # With no key, a correctly written swap goes straight to its quote. Anything else,
+            # such as a misheard token, is only suggested by the rules and needs a yes first.
+            swap = intent_repair.well_formed(text, lang, intent_repair.supported(data.live))
+            if swap is not None:
+                return await run_swap(
+                    client, swap["from_token"], None, swap["to_token"], None, swap["amount"], lang, data.live
+                )
             offer = await offer_repair(text, lang, data.live, use_model=False)
             if offer is not None:
                 return offer

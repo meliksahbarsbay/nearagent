@@ -166,6 +166,46 @@ def by_rules(text: str, lang: str, allowed: tuple[str, ...]) -> Repair | None:
     return Repair("suggest", {**swap, "amount": amount})
 
 
+# A sentence written exactly like this needs no question: the tickers are spelled right,
+# the amount is a plain number, and the order says which token is given.
+_AMOUNT = r"(\d+(?:[.,]\d+)?)"
+_TICKER = r"([A-Za-z]{2,5})"
+_SUFFIX = r"(?:['’](?:[a-zıiuüoöe]{1,3}))?"
+WELL_FORMED = (
+    re.compile(rf"^(?:please\s+)?(?:swap|convert|exchange|trade)\s+{_AMOUNT}\s+{_TICKER}\s+(?:to|into|for)\s+{_TICKER}\s*[.!]?$", re.I),
+    re.compile(rf"^{_AMOUNT}\s+{_TICKER}{_SUFFIX}\s+{_TICKER}{_SUFFIX}\s+(?:çevir|dönüştür|takas\s+et)\s*[.!]?$", re.I),
+)
+
+
+def well_formed(text: str, lang: str, allowed: tuple[str, ...]) -> dict | None:
+    """The swap of a correctly written sentence, or None when a question is still needed.
+
+    Only exact tickers count, so a misheard name such as "new" still gets "did you mean".
+    A named chain, a dollar amount or any other wording also falls through to the rules.
+    """
+    sentence = text.strip()
+    for pattern in WELL_FORMED:
+        match = pattern.match(sentence)
+        if match is None:
+            continue
+        amount, first, second = match.groups()
+        from_token, to_token = first.upper(), second.upper()
+        if from_token not in allowed or to_token not in allowed or from_token == to_token:
+            return None
+        if re.search(r"[.,]\d{3}$", amount):
+            return None  # "1.000" is one or a thousand, depending on the language, so ask.
+        found = by_rules(sentence, lang, allowed)
+        if found is None or found.kind != "suggest":
+            return None
+        swap = found.swap
+        if (swap["from_token"], swap["to_token"]) != (from_token, to_token):
+            return None
+        if not same_amount(amount, swap["amount"]):
+            return None
+        return swap
+    return None
+
+
 async def ask_model(provider: Service, text: str, allowed: tuple[str, ...]) -> dict:
     body = {
         "model": provider.model,

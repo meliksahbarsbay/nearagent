@@ -10,7 +10,7 @@ Mevcut not dosyası `docs/deploy-railway.md` doğru ve hâlâ geçerli. Bu dosya
 
 | Konu | Durum | Nerede |
 |---|---|---|
-| Builder | Railpack. Dockerfile, Procfile ve nixpacks.toml yok, gerekmiyor. | `railway.json:3-5` |
+| Builder | Railpack. Dockerfile, Procfile ve nixpacks.toml yok, gerekmiyor. Ama Railpack, `railway.json` içindeki `startCommand`'ı görmüyor (9 Kasım'da `railway up` ile doğrulandı). Başlatma komutu için `railpack.json` gerekli. | `railway.json:3-5`, `railpack.json` |
 | Başlatma komutu | `python -m app.public_main` | `railway.json:7` |
 | Port | `PORT` ortam değişkeni okunuyor, yoksa 8000. Host `0.0.0.0`. | `app/public_main.py:17` |
 | Sağlık kontrolü | `/health`, 200 ve `{"status":"ok"}`. Koruma katmanı cevaplar, uygulamaya ve ağa gitmez. | `railway.json:9-10`, `app/demo_guard.py:282-283` |
