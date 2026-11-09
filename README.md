@@ -43,7 +43,7 @@ Swap interfaces are visual: charts, popups, and icon-only buttons. A blind user 
 
 ## Live mode: off by default
 
-Live mode is off by default. An agent was created on NEAR mainnet through the Agent API's demo server and funded with 5 USDC. Freezing and unfreezing ran once on it. On 5 November 2026, one real swap, 4.9 USDC to 1.207098 wNEAR, was confirmed from the page with the NVDA screen reader. The proof links are under `Known limits`. That is the only real swap so far. Withdrawals and the NEAR send script have not run on mainnet yet.
+Live mode is off by default. An agent was created on NEAR mainnet through the Agent API's demo server and funded with 5 USDC. Freezing and unfreezing ran once on it. On 5 November 2026, one real swap, 4.9 USDC to 1.207098 wNEAR, was confirmed from the page with the NVDA screen reader. The proof links are under `Known limits`. That is the only real swap so far. On 9 November 2026, one real withdrawal, 0.1 wNEAR, reached the owner account as native NEAR. It was sent from the page in live mode, with the commands typed by a scripted browser that the owner started, and recorded for the demo video. Its proof is under `Known limits` too. The NEAR send script has not run on mainnet yet.
 
 Every real swap needs the owner's explicit approval. It is mainnet only, with real money, in a dedicated account.
 
@@ -94,7 +94,7 @@ Funds can leave only to the owner address, which is read from the signed policy.
 
 From a terminal, `python scripts/owner_setup.py withdraw --ne "hepsini USDC"` shows the same terms and a code, and `--onay=CODE` sends. The code belongs to that exact amount.
 
-Withdrawals count against the daily budget and the per-transaction limit. `hepsini` stops at the limit and says so. This has only run against a stand-in API.
+Withdrawals count against the daily budget and the per-transaction limit. `hepsini` stops at the limit and says so. One real withdrawal of 0.1 NEAR ran on 9 November 2026. Other amounts, `hepsini`, and the terminal path have only run against a stand-in API.
 
 ### Returning funds to an exchange
 
@@ -211,6 +211,7 @@ NEAR AI Cloud for `did you mean` and speech to text, one short run on 9 November
 - The Agent API documents the live quote's `quote` object only loosely. The app reads `amount_out`, `min_amount_out`, and `time_estimate_seconds`, the names a real quote used on 5 November 2026. The older `time_estimate` is still read. If `amount_out` is missing, nothing is sent. If the minimum is missing, the app uses 1% below the quote.
 - The Agent API gave no transaction hash for the first real swap, only an intent hash that no explorer opens. After a live operation, the Identifiers section lists what it has, most specific first: a transaction link on nearblocks when there is a hash, the swap on the NEAR Intents explorer when a 1Click deposit address is known, the agent's token movements on nearblocks, and the intent hash as `Kayıt kimliği` (`Record ID`). Each link has a copy button and an `Open in explorer` link that opens a new tab. `EXPLORER_TX_URL`, `EXPLORER_INTENTS_URL`, and `EXPLORER_ACCOUNT_URL` change the link forms.
 - The first real swap, 4.9 USDC to 1.207098124 wNEAR on 5 November 2026: the agent's transfer https://nearblocks.io/txns/3szqE97UvCerjvEudipAas7Rcgz4prpDHKEMFk4KoNK5, the delivery https://nearblocks.io/txns/Gum4SfcPJsvKn4msjvir2PQ8zj9wxqappdx6jgoLRg8L, and the swap on the NEAR Intents explorer https://explorer.near-intents.org/transactions/5bd678812f52462bd516d64afd0ff4933b66cdf1388e1e0d435eafede076b952. The app did not receive the deposit address of that swap, so it showed the agent's page instead.
+- The first real withdrawal, 0.1 wNEAR to the owner account, on 9 November 2026 at 11:08 UTC: the Agent API returned `op_UNMhWgG7Y_TIPR6QP5hiBpt9d-Hswu1guTPr60d1PFM` and, at the end, no transaction hash, so the page showed the agent's token movements. The transfer from `intents.near` to the owner was found on nearblocks afterwards: https://nearblocks.io/txns/2NRbQjo3FZfwDkNnY9uWY1j7SXoYenMdEeFc5PV5yJD1. The agent's wNEAR went from 1.207098 to 1.107098, and the owner's NEAR balance rose by exactly 0.1, from 0.296340 to 0.396340.
 - Live swaps do not check the token list of 1Click: the agent's own token list is used.
 - Trade history is off in the public demo, because a shared server would read one visitor's trades to another.
 - The accessibility audit in `docs/accessibility-audit.md` was run again after the fixes, with 0 axe violations in 20 scans. High and medium findings are closed except B5, which needs NVDA. It is not a conformance claim.
