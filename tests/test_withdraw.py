@@ -407,8 +407,43 @@ def test_near_finds_wnear_and_says_it_arrives_native(wallet):
     data = ask(client, "hepsini NEAR çek")
     body = json.loads(wallet.previews()[0].content)
     assert (body["asset"], body["chain"], body["recipient"]) == ("wnear", "near", OWNER)
-    assert "wNEAR sahip hesabına native NEAR olarak ulaşır." in data["spoken"]
+    # The note follows the amount at once, so "NEAR" is explained before anything else.
+    assert "Çekilecek: 1 NEAR. wNEAR sahip hesabına native NEAR olarak ulaşır. Nereye:" in data["spoken"]
     assert "Binance'e gönderilemez" not in data["spoken"]
+
+
+def wnear_wallet(wallet):
+    wallet.balances[0].update(asset_id="wnear", symbol="wNEAR", decimals=24,
+                              balance_raw="1000000000000000000000000",
+                              available_raw="1000000000000000000000000")
+    wallet.received = "100000000000000000000000"
+    wallet.policy["policy"]["limits"]["per_transaction"]["wnear"] = "2000000000000000000000000"
+
+
+@pytest.mark.parametrize(
+    "text, spoken",
+    [
+        (
+            "0.1 NEAR çek",
+            "Canlı mod, gerçek para. Çekilecek: 0,1 NEAR. wNEAR sahip hesabına native NEAR olarak ulaşır. "
+            "Nereye: sahip adresin, NEAR ağı. Ulaşacak: yaklaşık 0,1 NEAR. Ücret: yaklaşık 0,01 dolar. "
+            "Bu çekim günlük bütçenden yaklaşık 4 dolar düşer, kalan 6 dolar olur. Teklif 2 dakika geçerli. "
+            "Onaylıyor musun? Evet yaz ya da Onayla düğmesine bas.",
+        ),
+        (
+            "withdraw 0.1 NEAR",
+            "Live mode, real money. Withdrawing: 0.1 NEAR. wNEAR arrives at the owner account as native NEAR. "
+            "To: your owner address, on NEAR. Arriving: about 0.1 NEAR. Fee: about 0.01 dollars. "
+            "This takes about 4 dollars from your daily budget, leaving 6 dollars. Quote valid for 2 minutes. "
+            "Do you confirm? Type yes or press the Confirm button.",
+        ),
+    ],
+)
+def test_wnear_offer_in_full(wallet, text, spoken):
+    wnear_wallet(wallet)
+    client, _ = make_client()
+    assert ask(client, text)["spoken"] == spoken
+    assert wallet.sends() == []
 
 
 def test_empty_wallet(wallet):
@@ -565,6 +600,28 @@ def test_history_records_the_withdrawal(wallet):
     assert (entry["mode"], entry["status"]) == ("withdraw", "done")
     data = ask(client, "son işlemlerimi oku")
     assert ", çekim. 4 USDC verildi, 3,99 USDC alındı, tamamlandı." in data["spoken"]
+
+
+def test_a_wnear_withdrawal_is_recorded_and_read_as_near(wallet):
+    wnear_wallet(wallet)
+    client, _ = make_client()
+    track_id = answer(client, ask(client, "0.1 NEAR çek")["pending"], "evet")["track"]
+    wallet.status_replies = [status("SUCCESS", amount_out="100000000000000000000000", tx_hash="H")]
+    track(client, track_id)
+    entry = history.recent(1)[0]
+    assert (entry["mode"], entry["gave_symbol"], entry["got_symbol"]) == ("withdraw", "NEAR", "NEAR")
+    data = ask(client, "son işlemlerimi oku")
+    assert ", çekim. 0,1 NEAR verildi, 0,1 NEAR alındı, tamamlandı." in data["spoken"]
+    assert "wNEAR" not in data["spoken"]
+
+
+def test_an_older_wnear_withdrawal_row_reads_as_near_and_swaps_keep_wnear(wallet):
+    history.add(mode="withdraw", status="done", gave="0.1", gave_symbol="wNEAR", got="0.1", got_symbol="wNEAR", ref="op_1")
+    history.add(mode="live", status="done", gave="4.9", gave_symbol="USDC", got="1.2", got_symbol="wNEAR", ref="op_2")
+    client, _ = make_client()
+    spoken = ask(client, "read my recent trades")["spoken"]
+    assert "0.1 NEAR" in spoken and "0.1 wNEAR" not in spoken
+    assert "1.2 wNEAR" in spoken
 
 
 ENV = {

@@ -38,7 +38,7 @@ MESSAGES = {
         "freeze_question": "Ajanı dondurmamı istiyor musun? Çözene kadar takas ve çekim yapamaz. Dondurmak için evet de, vazgeçmek için hayır de.",
         "freeze_not_done": "Evet duymadım, ajanı dondurmadım. Dondurmak için ajanı dondur de.",
         "stop_cancelled": "İptal ettim, işlem yapılmadı. Ajanı dondurmak istersen ajanı dondur de.",
-        "withdraw_terms": "{mode} Çekilecek: {amount} {symbol}. Nereye: sahip adresin, {chain} ağı. {received} {fee} {budget} Teklif {ttl} dakika geçerli.",
+        "withdraw_terms": "{mode} Çekilecek: {amount} {symbol}.{native} Nereye: sahip adresin, {chain} ağı. {received} {fee} {budget} Teklif {ttl} dakika geçerli.",
         "withdraw_capped": "Hepsi tek seferde çekilemez, tek işlem sınırı bu kadar.",
         "withdraw_native": "wNEAR sahip hesabına native NEAR olarak ulaşır.",
         "withdraw_stays": "Dikkat, bu token sahip hesabında kalır. Bir borsaya göndermek istersen önce NEAR'a çevir.",
@@ -240,7 +240,7 @@ MESSAGES = {
         "freeze_question": "Do you want to freeze the agent? It cannot swap or withdraw until you unfreeze it. Say yes to freeze, or no to keep it running.",
         "freeze_not_done": "I did not hear a yes, so the agent was not frozen. To freeze it, say freeze the agent.",
         "stop_cancelled": "Cancelled, nothing was executed. To freeze the agent, say freeze the agent.",
-        "withdraw_terms": "{mode} Withdrawing: {amount} {symbol}. To: your owner address, on {chain}. {received} {fee} {budget} Quote valid for {ttl} minutes.",
+        "withdraw_terms": "{mode} Withdrawing: {amount} {symbol}.{native} To: your owner address, on {chain}. {received} {fee} {budget} Quote valid for {ttl} minutes.",
         "withdraw_capped": "All of it cannot go at once, so this is the limit for one transaction.",
         "withdraw_native": "wNEAR arrives at the owner account as native NEAR.",
         "withdraw_stays": "Warning: this token stays on the owner account. To send it on to an exchange, swap it to NEAR first.",
@@ -703,6 +703,12 @@ def say_date(moment: str, lang: str) -> str:
     return say("history_date", lang, day=local.day, month=month, time=local.strftime("%H:%M"))
 
 
+def history_symbol(entry: dict, field: str) -> str:
+    """A withdrawal reached the owner as native NEAR, so even older wNEAR rows say NEAR."""
+    symbol = entry[field]
+    return withdraw_symbol(symbol) if entry.get("mode") == "withdraw" else symbol
+
+
 def say_history(entries: list[dict], lang: str) -> str:
     if not entries:
         return say("history_empty", lang)
@@ -715,9 +721,9 @@ def say_history(entries: list[dict], lang: str) -> str:
             date=say_date(entry["at"], lang),
             mode=table["history_modes"][entry["mode"]],
             gave=format_amount(entry["gave"], lang),
-            gave_symbol=entry["gave_symbol"],
+            gave_symbol=history_symbol(entry, "gave_symbol"),
             got=format_amount(entry["got"], lang),
-            got_symbol=entry["got_symbol"],
+            got_symbol=history_symbol(entry, "got_symbol"),
             status=table["history_status"].get(entry["status"], entry["status"]),
         )
         for number, entry in enumerate(entries, start=1)
@@ -754,9 +760,11 @@ def say_withdraw(order, lang: str, ttl: int) -> str:
         fee=say_fee(fee, lang),
         budget=budget,
         ttl=ttl,
+        # Right after the amount, so "NEAR" is explained before anything else is said.
+        native=f" {say('withdraw_native', lang)}" if order.symbol == "wNEAR" else "",
     )
-    note = say("withdraw_native" if order.symbol == "wNEAR" else "withdraw_stays", lang)
-    terms = f"{terms} {note}"
+    if order.symbol != "wNEAR":
+        terms = f"{terms} {say('withdraw_stays', lang)}"
     return f"{say('withdraw_capped', lang)} {terms}" if order.capped else terms
 
 

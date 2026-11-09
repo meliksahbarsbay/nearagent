@@ -26,6 +26,7 @@ from app.agent_api import (
 )
 from app.amounts import find_amount, first_number, named_tokens, says_all, tokenize
 from app.history import history
+from app.messages import withdraw_symbol
 from app.oneclick import (
     CHAIN_NAMES,
     SYMBOL_ALIASES,
@@ -705,9 +706,10 @@ async def execute_withdraw(order: WithdrawOrder) -> str | None:
         entry = history.add(
             mode="withdraw",
             gave=order.amount_text,
-            gave_symbol=order.symbol,
+            # wNEAR leaves the agent and reaches the owner as native NEAR. Swaps keep wNEAR.
+            gave_symbol=withdraw_symbol(order.symbol),
             got=order.received_text or order.amount_text,
-            got_symbol=order.symbol,
+            got_symbol=withdraw_symbol(order.symbol),
             status="processing",
             ref=None,
         )

@@ -141,8 +141,8 @@ then, in voice mode:
 **Spoken command (2:00):** `Withdraw all NEAR`
 
 **App says (example):**
-`Live mode, real money. Withdrawing: ... wNEAR. To: your owner address, on NEAR. Arriving: about ... wNEAR. ... This takes about ... dollars from your daily budget, leaving ... dollars. Quote valid for 2 minutes. wNEAR arrives at the owner account as native NEAR.`
-then `... wNEAR will be withdrawn to your owner address. To confirm, say yes I confirm. To stop, say cancel.`
+`Live mode, real money. Withdrawing: ... NEAR. wNEAR arrives at the owner account as native NEAR. To: your owner address, on NEAR. Arriving: about ... NEAR. ... This takes about ... dollars from your daily budget, leaving ... dollars. Quote valid for 2 minutes.`
+then `... NEAR will be withdrawn to your owner address. To confirm, say yes I confirm. To stop, say cancel.`
 
 **Voiceover (2:12):**
 "Funds can only leave to the owner address in the signed policy. If I say any other address, it refuses. The address is never read aloud. It has a copy button."
