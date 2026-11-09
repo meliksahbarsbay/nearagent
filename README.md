@@ -7,7 +7,7 @@ An accessibility-first crypto assistant for NEAR Intents. Built at NEAR HACKATHO
 - **What it does:** a blind user types or says one sentence, such as `swap 2 NEAR to USDC`, and hears the quote read in a fixed order. Live swaps and withdrawals go through a policy-bound NEAR Intents agent wallet, and each one is confirmed by the owner.
 - **How to try:** open the public demo at https://nearagent-production.up.railway.app (dry mode only, no funds move), or follow `Run it in 5 minutes` (dry mode, no keys, no money), then `Try it: do X, see Y`. `python -m pytest -q` runs all offline tests.
 - **What ran on mainnet:** on 5 November 2026, a swap of 4.9 USDC to 1.207 wNEAR: https://nearblocks.io/txns/3szqE97UvCerjvEudipAas7Rcgz4prpDHKEMFk4KoNK5. On 9 November 2026, a withdrawal of 0.1 NEAR to the owner account: https://nearblocks.io/txns/2NRbQjo3FZfwDkNnY9uWY1j7SXoYenMdEeFc5PV5yJD1.
-- **Demo video:** <VIDEO_LINK>
+- **Demo video:** https://x.com/meliksahbars/status/2119782558053650489 (the post on X, with the video attached)
 
 ## Problem
 

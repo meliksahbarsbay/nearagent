@@ -14,7 +14,7 @@ Bu dosyaya e-posta, NEAR adresi ya da doldurulmuş başvuru verisi yazıp commit
 
 - Repo 9 Kasım 2026 itibarıyla herkese açık. Hakem süreci boyunca açık kalmalı.
 - e-posta: bilerek açık bırakıldı. Commit bilgisindeki adres public olunca görünür, geçmiş yeniden yazılmadı.
-- Demo postunu yayınla ve linkini al. README başındaki <VIDEO_LINK> yer tutucusunu da bu linkle değiştir.
+- Demo postu 9 Kasım 2026'da yayınlandı: https://x.com/meliksahbars/status/2119782558053650489 README başındaki video linki de bu.
 - Herkese açık demo kurduysan en az 2026-11-18'e kadar, tercihen 2026-11-25'e kadar açık tut.
 - Aşağıdaki durum cümlelerinin hâlâ doğru olduğunu kontrol et.
 
@@ -27,7 +27,7 @@ Bu dosyaya e-posta, NEAR adresi ya da doldurulmuş başvuru verisi yazıp commit
 - tracks: `open`, `security`, `agents`, `realworld`. Aşağıdaki nota bak.
 - nearAddress: boş. Sen dolduracaksın. Ödül buraya gelir. Mainnet hesabı olmalı, küçük harfle, 2 ile 64 karakter arası.
 - projectUrl: boş. Sen dolduracaksın. Herkese açık repo linki.
-- demoUrl: boş. Sen dolduracaksın. X'teki ana postun linki.
+- demoUrl: https://x.com/meliksahbars/status/2119782558053650489
 - idea: aşağıdaki metin.
 - consent: boş. Aşağıdaki metni kabul edersen `true` olur.
 
