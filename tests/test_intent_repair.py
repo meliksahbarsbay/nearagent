@@ -1,4 +1,5 @@
 """Did you mean ...? Rules first, a mocked model second, and code checks every answer."""
+import asyncio
 import json
 import logging
 
@@ -204,6 +205,29 @@ def test_near_ai_can_be_chosen_in_env(monkeypatch):
     provider = intent_repair.repair_provider()
     assert provider.name == "near_ai"
     assert provider.base_url.startswith("https://cloud-api.near.ai")
+
+
+def repair_body(monkeypatch, name):
+    """The JSON body ask_model sends to this service."""
+    calls = fake_model(monkeypatch, {"action": "other", "from_token": None, "to_token": None, "amount": None, "confidence": 0})
+    service = intent_repair.Service(name, "https://example.test/v1", "test-not-real", "some-model", 8)
+    asyncio.run(intent_repair.ask_model(service, "x", ("NEAR", "USDC")))
+    return json.loads(calls[0].content)
+
+
+def test_near_ai_repair_asks_for_little_reasoning(monkeypatch):
+    monkeypatch.delenv("NEARAI_REPAIR_REASONING_EFFORT", raising=False)
+    assert repair_body(monkeypatch, "near_ai")["reasoning_effort"] == "low"
+
+
+def test_near_ai_reasoning_effort_can_be_full(monkeypatch):
+    monkeypatch.setenv("NEARAI_REPAIR_REASONING_EFFORT", "full")
+    assert "reasoning_effort" not in repair_body(monkeypatch, "near_ai")
+
+
+def test_openai_repair_gets_no_reasoning_effort(monkeypatch):
+    monkeypatch.delenv("NEARAI_REPAIR_REASONING_EFFORT", raising=False)
+    assert "reasoning_effort" not in repair_body(monkeypatch, "openai")
 
 
 def test_openai_is_the_default_provider(monkeypatch):

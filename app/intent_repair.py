@@ -24,7 +24,7 @@ import httpx
 
 from app.amounts import find_amount, first_number, tokenize
 from app.intent import DEFAULT_OPENAI_MODEL
-from app.providers import Service, chain
+from app.providers import NEAR_AI, Service, chain
 from app.voice_text import normalize_voice
 
 log = logging.getLogger("nearagent.repair")
@@ -40,6 +40,11 @@ MIN_CONFIDENCE = 0.7
 TIMEOUT_SECONDS = 20
 # Listed by NEAR AI Cloud with structured outputs, and run in its TEE. Checked on 5 November 2026.
 DEFAULT_NEAR_AI_REPAIR_MODEL = "z-ai/glm-5.3-flash"
+# GLM-5.3 Flash thinks up to 8192 tokens by default. "low" keeps it to a few, per NEAR AI's
+# reasoning docs. Measured on 9 November 2026 with 5 garbled sentences: 5 of 5 right either way,
+# median 5.1 s down to 1.5 s, and no more 8 second fall-backs to OpenAI. Only NEAR AI gets it.
+# NEARAI_REPAIR_REASONING_EFFORT=full sends nothing and leaves the model's default.
+DEFAULT_NEAR_AI_REASONING_EFFORT = "low"
 SUPPORTED_DRY = ("NEAR", "USDC", "USDT", "SOL", "ETH", "BTC")
 # The agent's signed policy allows these.
 SUPPORTED_LIVE = ("NEAR", "USDC", "SOL", "ETH")
@@ -173,6 +178,10 @@ async def ask_model(provider: Service, text: str, allowed: tuple[str, ...]) -> d
             "json_schema": {"name": "repair", "strict": True, "schema": SCHEMA},
         },
     }
+    if provider.name == NEAR_AI:
+        effort = (os.getenv("NEARAI_REPAIR_REASONING_EFFORT") or DEFAULT_NEAR_AI_REASONING_EFFORT).strip().lower()
+        if effort != "full":
+            body["reasoning_effort"] = effort
     headers = {"Authorization": f"Bearer {provider.api_key}"}
     async with httpx.AsyncClient(base_url=provider.base_url, timeout=provider.timeout, transport=transport) as client:
         response = await client.post("chat/completions", json=body, headers=headers)
