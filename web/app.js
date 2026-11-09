@@ -24,13 +24,13 @@ const TEXT = {
     busy: "Yanıt bekleniyor.",
     failed: "Sunucuya ulaşılamadı. Uygulamanın çalıştığını kontrol et, sonra yeniden dene.",
     shortcuts:
-      "Kısayollar: Enter gönderir ya da onaylar. Esc iptal eder. Alt M mikrofonu açar. Alt R son cevabı tekrar okur. Alt H yardımı okur.",
+      "Kısayollar: Enter gönderir ya da onaylar. Esc iptal eder. Alt M mikrofonu açar. Alt S sesli modu açar ya da kapatır. Alt R son cevabı tekrar okur. Alt H yardımı okur.",
     shortcutsLive:
-      "Kısayollar: Enter gönderir, onaylamaz. Onay için evet yaz. Esc iptal eder. Alt M mikrofonu açar. Alt R son cevabı tekrar okur. Alt H yardımı okur.",
+      "Kısayollar: Enter gönderir, onaylamaz. Onay için evet yaz. Esc iptal eder. Alt M mikrofonu açar. Alt S sesli modu açar ya da kapatır. Alt R son cevabı tekrar okur. Alt H yardımı okur.",
     helpLive:
-      "Canlı mod açık, onayladığın takaslar gerçek para kullanır. Bir cümle yaz ve Enter'a bas. Teklif okununca onaylamak için evet yaz ya da Onayla düğmesine bas, Enter onay sayılmaz. Esc ya da hayır iptal eder. Alt M mikrofonu açar. Alt R son cevabı tekrar okur. Komutlar: cüzdanımda ne var, son işlemlerimi oku, paramı cüzdanıma çek, politikamı oku, bütçem ne kadar kaldı, ajanı dondur, ajanı çöz.",
+      "Canlı mod açık, onayladığın takaslar gerçek para kullanır. Bir cümle yaz ve Enter'a bas. Teklif okununca onaylamak için evet yaz ya da Onayla düğmesine bas, Enter onay sayılmaz. Esc ya da hayır iptal eder. Alt M mikrofonu açar. Alt S sesli modu açar ya da kapatır. Alt R son cevabı tekrar okur. Komutlar: cüzdanımda ne var, son işlemlerimi oku, paramı cüzdanıma çek, politikamı oku, bütçem ne kadar kaldı, ajanı dondur, ajanı çöz.",
     help:
-      "Bir cümle yaz ve Enter'a bas, örneğin 2 NEAR'ı USDC'ye çevir. Teklif okununca Enter ya da evet onaylar, Esc ya da hayır iptal eder. Alt M mikrofonu açar. Alt R son cevabı tekrar okur. Komutlar: cüzdanımda ne var, son işlemlerimi oku, paramı cüzdanıma çek, politikamı oku, bütçem ne kadar kaldı, ajanı dondur, ajanı çöz.",
+      "Bir cümle yaz ve Enter'a bas, örneğin 2 NEAR'ı USDC'ye çevir. Teklif okununca Enter ya da evet onaylar, Esc ya da hayır iptal eder. Alt M mikrofonu açar. Alt S sesli modu açar ya da kapatır. Alt R son cevabı tekrar okur. Komutlar: cüzdanımda ne var, son işlemlerimi oku, paramı cüzdanıma çek, politikamı oku, bütçem ne kadar kaldı, ajanı dondur, ajanı çöz.",
     mic: "Mikrofon",
     voice: "Sesli mod",
     voiceOn: "Sesli mod açık. Konuş, dinliyorum. Çıkmak için sesli modu kapat de ya da Esc'ye bas.",
@@ -105,13 +105,13 @@ const TEXT = {
     busy: "Waiting for a reply.",
     failed: "Could not reach the server. Check that the app is running, then try again.",
     shortcuts:
-      "Shortcuts: Enter sends or confirms. Escape cancels. Alt M turns on the microphone. Alt R repeats the last reply. Alt H reads the help.",
+      "Shortcuts: Enter sends or confirms. Escape cancels. Alt M turns on the microphone. Alt S turns voice mode on or off. Alt R repeats the last reply. Alt H reads the help.",
     shortcutsLive:
-      "Shortcuts: Enter sends and does not confirm. To confirm, type yes. Escape cancels. Alt M turns on the microphone. Alt R repeats the last reply. Alt H reads the help.",
+      "Shortcuts: Enter sends and does not confirm. To confirm, type yes. Escape cancels. Alt M turns on the microphone. Alt S turns voice mode on or off. Alt R repeats the last reply. Alt H reads the help.",
     helpLive:
-      "Live mode is on, and swaps you confirm use real money. Type a sentence and press Enter. After a quote, type yes or press the Confirm button to confirm. Enter does not confirm. Escape or no cancels. Alt M turns on the microphone. Alt R repeats the last reply. Commands: what is my balance, read my recent trades, withdraw to my wallet, read my policy, how much budget is left, freeze the agent, unfreeze the agent.",
+      "Live mode is on, and swaps you confirm use real money. Type a sentence and press Enter. After a quote, type yes or press the Confirm button to confirm. Enter does not confirm. Escape or no cancels. Alt M turns on the microphone. Alt S turns voice mode on or off. Alt R repeats the last reply. Commands: what is my balance, read my recent trades, withdraw to my wallet, read my policy, how much budget is left, freeze the agent, unfreeze the agent.",
     help:
-      "Type a sentence and press Enter, for example swap 2 NEAR to USDC. After a quote, Enter or yes confirms, and Escape or no cancels. Alt M turns on the microphone. Alt R repeats the last reply. Commands: what is my balance, read my recent trades, withdraw to my wallet, read my policy, how much budget is left, freeze the agent, unfreeze the agent.",
+      "Type a sentence and press Enter, for example swap 2 NEAR to USDC. After a quote, Enter or yes confirms, and Escape or no cancels. Alt M turns on the microphone. Alt S turns voice mode on or off. Alt R repeats the last reply. Commands: what is my balance, read my recent trades, withdraw to my wallet, read my policy, how much budget is left, freeze the agent, unfreeze the agent.",
     mic: "Microphone",
     voice: "Voice mode",
     voiceOn: "Voice mode is on. Speak, I am listening. To leave, say stop voice mode or press Escape.",
@@ -289,11 +289,13 @@ function useBrowserSpeech(spoken) {
   setSttEngine("browser", spoken);
 }
 
-function announce(message) {
+function announce(message, lang = language) {
   // Emptying first makes a repeated sentence count as a change for screen readers.
   window.clearTimeout(announceTimer);
   result.textContent = "";
   announceTimer = window.setTimeout(() => {
+    // A reply in the other language is read with that language's voice.
+    result.lang = lang;
     result.textContent = message;
   }, ANNOUNCE_DELAY_MS);
   // The result area is silent in voice mode, so the app's own voice reads it instead.
@@ -518,14 +520,16 @@ async function send(path, body, button) {
     // Hiding a focused button drops focus to the page, and this is the moment money moves.
     if (confirmHadFocus && confirmButton.hidden) sentence.focus();
     rememberIds(data);
-    if (data.language in TEXT) applyLanguage(data.language);
+    // The page language changes only when the user picks it. A reply in another language
+    // is marked as such, so the screen reader pronounces it right, and the page stays put.
+    const replyLang = data.language in TEXT ? data.language : language;
     if (response.ok || pending) sentence.value = "";
     // Answers go in the text box, so a question from the form moves focus there.
     // In voice mode focus stays put, because a screen reader would talk over the reply.
     if (pending && !voice.on) sentence.focus();
     if (data.field && !voice.on) markField(data.field);
     lastReply = data.spoken || TEXT[language].failed;
-    announce(lastReply);
+    announce(lastReply, data.spoken ? replyLang : language);
     if (data.track) followSwap(data.track);
   } catch (error) {
     if (error.name !== "AbortError") announce(TEXT[language].failed);

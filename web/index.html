@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="tr">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>nearagent: erişilebilir kripto asistanı</title>
+  <title>nearagent: an accessible crypto assistant</title>
   <style>
     :root { color-scheme: light dark; --focus: #0050b3; }
     @media (prefers-color-scheme: dark) { :root { --focus: #8ab4ff; } }
@@ -40,7 +40,7 @@
       <label for="sentence" id="sentence-label"></label>
       <input id="sentence" autocomplete="off" spellcheck="false" aria-describedby="shortcuts">
       <p id="shortcuts"></p>
-      <button type="button" id="mic" aria-pressed="false"></button>
+      <button type="button" id="mic" aria-pressed="false" aria-keyshortcuts="Alt+M"></button>
       <button type="button" id="voice-toggle" aria-pressed="false" aria-keyshortcuts="Alt+S"></button>
       <button type="submit" id="ask-submit"></button>
       <p id="mic-state" hidden></p>

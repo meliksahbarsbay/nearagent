@@ -168,8 +168,7 @@ def test_offer_reads_what_where_and_the_budget_before_confirming(wallet):
         "Ulaşacak: yaklaşık 3,99 USDC. Ücret: yaklaşık 0,01 dolar. "
         "Bu çekim günlük bütçenden yaklaşık 4 dolar düşer, kalan 6 dolar olur. "
         "Teklif 2 dakika geçerli. "
-        "Dikkat, bu token sahip hesabında kalır ve oradan Binance'e gönderilemez. "
-        "Binance'e dönecekse önce NEAR'a çevir. "
+        "Dikkat, bu token sahip hesabında kalır. Bir borsaya göndermek istersen önce NEAR'a çevir. "
         "Onaylıyor musun? Evet yaz ya da Onayla düğmesine bas."
     )
     assert data["confirm_button"] is True

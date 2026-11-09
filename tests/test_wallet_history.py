@@ -171,7 +171,9 @@ def test_confirmed_dry_swap_is_saved_and_read(no_agent, no_parser):
     assert entry["ref"] == "abc"
     data = ask(client, "son işlemlerimi oku")
     assert data["spoken"].startswith("Son 1 işlem. İşlem 1: ")
-    assert ", deneme. 1 wNEAR verildi, 4,301912 USDC alındı, işlem yapılmadı." in data["spoken"]
+    assert ", deneme. Teklif: 1 wNEAR karşılığında 4,301912 USDC, işlem yapılmadı." in data["spoken"]
+    # A dry run received nothing, so it never says it did.
+    assert "alındı" not in data["spoken"]
     assert "abc" not in data["spoken"]
     assert data["copies"] == [{"key": "trade", "number": 1, "value": "abc"}]
 
@@ -190,8 +192,9 @@ def test_only_the_last_five_are_read_newest_first(no_agent, no_parser):
     client, _ = make_client()
     data = ask(client, "read my recent trades")
     assert data["spoken"].startswith("Last 5 trades. Trade 1: ")
-    assert "Gave 7 A" in data["spoken"]
-    assert "Gave 2 A" not in data["spoken"]
+    assert "Quote: 7 A for 1 B, nothing executed." in data["spoken"]
+    assert "Quote: 2 A" not in data["spoken"]
+    assert "received" not in data["spoken"]
     assert [c["value"] for c in data["copies"]] == ["ref6", "ref5", "ref4", "ref3", "ref2"]
 
 

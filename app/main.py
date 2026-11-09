@@ -73,6 +73,7 @@ from app.messages import (  # noqa: E402
     say_repair_sentence,
     say_usd_note,
     say_withdraw,
+    withdraw_symbol,
 )
 from app.owner import (  # noqa: E402
     OwnerError,
@@ -109,6 +110,8 @@ ALREADY_DONE = {
 }
 
 app = FastAPI(title="nearagent")
+# Set by app.demo_guard.protect. The public page then explains why agent commands are off.
+public_demo = False
 oneclick = OneClick()
 pendings = PendingStore()
 
@@ -460,7 +463,7 @@ async def run_control(kind: str, lang: str) -> dict:
             return {
                 "action": action,
                 "language": lang,
-                "spoken": say("unfreeze_wait", lang, minutes=minutes),
+                "spoken": say("unfreeze_wait_one", lang) if minutes == 1 else say("unfreeze_wait", lang, minutes=minutes),
             }
         return reply(action, ALREADY_DONE.get(error.code, "control_failed"), lang)
     except OwnerError:
@@ -505,6 +508,8 @@ async def answer_pending(
         return await answer_amount(client, key, item, text)
     if item.kind == "repair_amount":
         return answer_repair_amount(key, item, text)
+    if item.kind == "freeze_confirm":
+        return await answer_freeze(key, item, text, word)
     if item.kind == "repair":
         return await answer_repair(client, key, item, text, word)
     if word != "yes":
@@ -543,11 +548,28 @@ def run_history(lang: str) -> dict:
     }
 
 
+def ask_freeze(lang: str, live: bool) -> dict:
+    """A bare "stop" may mean freeze. Ask, and sign nothing until yes."""
+    key = pendings.add("freeze_confirm", lang, swap={"live": live}, seconds=REPAIR_SECONDS)
+    # Silence in voice mode cancels this question, so nothing is frozen by accident either.
+    return {**reply("freeze_ask", "freeze_question", lang, key), "answer_required": True}
+
+
+async def answer_freeze(key: str, item: Pending, text: str, word: str | None):
+    """Yes freezes. No and silence change nothing. Anything else is read as a new sentence."""
+    pendings.drop(key)
+    if word == "yes":
+        return await run_control("agent_freeze", item.lang)
+    if text:
+        return await answer_ask(AskInput(text=text, live=item.swap.get("live", False)), oneclick)
+    return reply("cancelled", "freeze_not_done", item.lang)
+
+
 async def run_command(command: str, lang: str, text: str = "", live: bool = False) -> dict:
     if command == "history":
         return run_history(lang)
     if not agent_ready():
-        return reply(command, "no_agent", lang)
+        return reply(command, "demo_no_agent" if public_demo else "no_agent", lang)
     if command == "withdraw":
         require_live(True)
         # The page must already say live, so real money is never confirmed under a dry label.
@@ -556,6 +578,8 @@ async def run_command(command: str, lang: str, text: str = "", live: bool = Fals
         return await offer_withdraw(text, lang)
     if command == "freeze":
         return await run_control("agent_freeze", lang)
+    if command == "freeze_ask":
+        return ask_freeze(lang, live)
     if command == "unfreeze":
         return ask_unfreeze(lang)
     try:
@@ -571,7 +595,7 @@ def voice_question(item: Pending) -> str:
     """Repeat the amount and token, then name the whole phrase that confirms."""
     order, lang = item.order, item.lang
     if isinstance(order, WithdrawOrder):
-        return say("voice_confirm_withdraw", lang, amount=format_amount(order.amount_text, lang), symbol=order.symbol)
+        return say("voice_confirm_withdraw", lang, amount=format_amount(order.amount_text, lang), symbol=withdraw_symbol(order.symbol))
     destination = order.destination
     return say(
         "voice_confirm_swap",
@@ -756,7 +780,7 @@ async def ask_by_voice(data: AskInput, client: OneClick):
     if guessed is not None:
         return guessed
     command = detect_command(text) if len(text) <= MAX_SENTENCE else None
-    if data.pending and not (command and command[0] == "freeze"):
+    if data.pending and not (command and command[0] in ("freeze", "freeze_ask")):
         lang = data.lang or detect_language(text)
         answered = await answer_voice(data, text, lang)
         if answered is not None:
@@ -772,6 +796,13 @@ async def answer_ask(data: AskInput, client: OneClick):
         if data.pending:
             pendings.drop(data.pending)
         return await run_command(*command)
+    # A bare "stop" during an open question cancels that question. It never signs anything.
+    if command and command[0] == "freeze_ask" and data.pending:
+        item = pendings.get(data.pending)
+        pendings.drop(data.pending)
+        if item is not None and item.kind != "freeze_confirm":
+            return reply("cancelled", "stop_cancelled", item.lang)
+        return reply("cancelled", "freeze_not_done", item.lang if item else command[1])
     if data.pending:
         # "evet" alone gives no language hint, so the page language decides.
         lang = data.lang or detect_language(text)
@@ -808,8 +839,14 @@ async def answer_ask(data: AskInput, client: OneClick):
         return error_response(error, lang, field="text" if error.code in TEXT_ERRORS else None)
 
 
-def stt_reply(status: int, key: str, lang: str) -> JSONResponse:
-    return JSONResponse(status_code=status, content={"error": key, "language": lang, "spoken": say(key, lang)})
+STT_ENGINES = {"near_ai": "NEAR AI", "openai": "OpenAI"}
+
+
+def stt_reply(status: int, key: str, lang: str, provider: str | None = None) -> JSONResponse:
+    """The engine is named as chosen, so NEAR AI is never reported as OpenAI."""
+    engine = STT_ENGINES.get(provider) or say("stt_server", lang)
+    spoken = say(key, lang, engine=engine)
+    return JSONResponse(status_code=status, content={"error": key, "language": lang, "spoken": spoken})
 
 
 @app.get("/api/providers")
@@ -830,7 +867,7 @@ async def transcribe_audio(
 ):
     """A short recording to text. NEAR AI first, then OpenAI. The page falls back to Web Speech."""
     if not speech.ready():
-        return stt_reply(503, "stt_off", lang)
+        return stt_reply(503, "stt_off", lang, provider)
     audio = bytearray()
     async for chunk in request.stream():
         audio.extend(chunk)
@@ -841,7 +878,7 @@ async def transcribe_audio(
     try:
         heard = await speech.transcribe(bytes(audio), request.headers.get("content-type", ""), lang, provider)
     except speech.TranscribeOff:
-        return stt_reply(503, "stt_off", lang)
+        return stt_reply(503, "stt_off", lang, provider)
     except speech.TranscribeFailed:
         return stt_reply(502, "stt_failed", lang)
     return {"language": lang, **heard}

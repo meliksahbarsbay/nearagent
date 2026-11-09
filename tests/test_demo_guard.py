@@ -76,6 +76,8 @@ def public(monkeypatch):
     """The real app behind the guard, with a stand-in language model provider."""
     # Saved here so that the test puts the real parser back afterwards.
     monkeypatch.setattr(main, "parse_intent", main.parse_intent)
+    # protect() marks the app as the public demo. Put the flag back for the other tests.
+    monkeypatch.setattr(main, "public_demo", main.public_demo)
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     monkeypatch.delenv("NEAR_AI_API_KEY", raising=False)
     for name in AGENT_SECRETS:
@@ -167,10 +169,30 @@ def test_guard_answers_429_in_the_page_language_and_keeps_the_question():
     assert response.json()["pending"] == "abc"
 
 
-def test_guard_429_is_turkish_by_default():
+def test_guard_429_is_english_by_default():
     client = guarded(Settings(per_minute=1))
     client.post("/api/echo", json={})
-    assert "dakikalık" in client.post("/api/echo", json={}).json()["spoken"]
+    assert "one minute" in client.post("/api/echo", json={}).json()["spoken"]
+
+
+def test_guard_429_is_english_for_a_browser_neither_turkish_nor_english():
+    client = guarded(Settings(per_minute=1))
+    german = {"Accept-Language": "de-DE,de;q=0.9"}
+    client.post("/api/echo", json={}, headers=german)
+    assert "one minute" in client.post("/api/echo", json={}, headers=german).json()["spoken"]
+
+
+def test_guard_429_is_turkish_for_a_turkish_browser():
+    client = guarded(Settings(per_minute=1))
+    turkish = {"Accept-Language": "tr-TR,tr;q=0.9"}
+    client.post("/api/echo", json={}, headers=turkish)
+    assert "dakikalık" in client.post("/api/echo", json={}, headers=turkish).json()["spoken"]
+
+
+def test_guard_429_follows_the_lang_query():
+    client = guarded(Settings(per_minute=1))
+    client.post("/api/echo?lang=tr", json={})
+    assert "dakikalık" in client.post("/api/echo?lang=tr", json={}).json()["spoken"]
 
 
 def test_different_edge_ips_have_their_own_limit():
@@ -347,7 +369,7 @@ def test_public_app_refuses_live_mode_on_every_route(public):
 def test_public_freeze_reaches_no_agent(public):
     client, calls = public(Settings())
     response = client.post("/api/ask", json={"text": "ajanı dondur"})
-    assert "kurulmadı" in response.json()["spoken"]
+    assert response.json()["spoken"].startswith("Bu herkese açık demo")
     assert "signed" not in response.json()
     assert calls == []
 

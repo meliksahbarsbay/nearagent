@@ -11,6 +11,7 @@ import math
 import os
 import time
 from dataclasses import dataclass
+from urllib.parse import parse_qs
 from decimal import Decimal, InvalidOperation
 from typing import Callable
 
@@ -27,6 +28,26 @@ MAX_BODY_BYTES = 4096
 MAX_TRACKED_IPS = 100_000
 OVERFLOW_KEY = "overflow"
 IPV6_NETWORK_BITS = 64
+
+# FastAPI's own documentation pages. Nothing secret, but no reason to publish the whole API.
+HIDDEN_PATHS = ("/docs", "/redoc", "/openapi.json")
+
+# The page loads only its own scripts and styles its own inline <style>. Speech recognition
+# and speech synthesis are browser features that CSP does not block. The microphone is
+# allowed for this page only.
+CONTENT_SECURITY_POLICY = (
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+    "connect-src 'self'; img-src 'self' data:; media-src 'self' blob:; object-src 'none'; "
+    "base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+)
+SECURITY_HEADERS = [
+    (b"content-security-policy", CONTENT_SECURITY_POLICY.encode()),
+    (b"x-content-type-options", b"nosniff"),
+    (b"referrer-policy", b"no-referrer"),
+    (b"permissions-policy", b"microphone=(self), camera=(), geolocation=()"),
+    (b"x-frame-options", b"DENY"),
+]
+HSTS = (b"strict-transport-security", b"max-age=31536000")
 
 # Without these the app cannot read, sign for, or act as an agent.
 AGENT_SECRETS = (
@@ -46,12 +67,16 @@ MESSAGES = {
         "rate_day": "Bugünlük istek sınırına ulaştın. Yarın yeniden dene.",
         "live_disabled": "Bu herkese açık demoda canlı mod kapalı. Deneme modunda devam edebilirsin, para hareket etmez.",
         "too_large": "İstek çok uzun. Daha kısa yaz.",
+        "server_error": "Sunucuda bir hata oldu, işlem yapılmadı. Biraz sonra yeniden dene.",
+        "not_found": "Bu sayfa yok. Ana sayfaya dön.",
     },
     "en": {
         "rate_minute": "You reached the limit for one minute. Try again in about {seconds} seconds.",
         "rate_day": "You reached today's request limit. Try again tomorrow.",
         "live_disabled": "Live mode is off in this public demo. You can continue in dry mode, so no funds move.",
         "too_large": "That request is too long. Try a shorter one.",
+        "server_error": "Something went wrong on the server, and nothing was sent. Try again shortly.",
+        "not_found": "This page does not exist. Go back to the main page.",
     },
 }
 
@@ -229,10 +254,32 @@ def client_key(scope: dict, header: str) -> str:
 
 
 def read_language(scope: dict, data: dict) -> str:
+    """The page's own language first, then ?lang=, then Turkish only for a Turkish browser."""
     if data.get("lang") in MESSAGES:
         return data["lang"]
+    query = parse_qs(scope.get("query_string", b"").decode("latin-1"))
+    if (query.get("lang") or [""])[0] in MESSAGES:
+        return query["lang"][0]
     accepted = dict(scope["headers"]).get(b"accept-language", b"")
-    return "en" if accepted[:2].lower() == b"en" else "tr"
+    return "tr" if accepted[:2].lower() == b"tr" else "en"
+
+
+def is_https(scope: dict) -> bool:
+    """Railway ends TLS at its edge and says so in X-Forwarded-Proto."""
+    forwarded = dict(scope["headers"]).get(b"x-forwarded-proto", b"")
+    return scope.get("scheme") == "https" or forwarded.split(b",")[0].strip().lower() == b"https"
+
+
+def with_security_headers(scope: dict, send):
+    """Add the security headers to every response. HSTS only over HTTPS."""
+    extra = SECURITY_HEADERS + ([HSTS] if is_https(scope) else [])
+
+    async def secured(message):
+        if message["type"] == "http.response.start":
+            message = {**message, "headers": list(message.get("headers") or []) + extra}
+        await send(message)
+
+    return secured
 
 
 class DemoGuard:
@@ -279,10 +326,14 @@ class DemoGuard:
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
             return await self.app(scope, receive, send)
+        send = with_security_headers(scope, send)
         if scope["path"] == "/health":
             return await self.answer(send, 200, {"status": "ok"})
+        if scope["path"].startswith(HIDDEN_PATHS):
+            lang = read_language(scope, {})
+            return await self.refuse(send, 404, "not_found", lang, {})
         if not scope["path"].startswith("/api/"):
-            return await self.app(scope, receive, send)
+            return await self.run_app(scope, receive, send, read_language(scope, {}))
 
         body, too_large = await self.read_body(receive)
         try:
@@ -310,7 +361,40 @@ class DemoGuard:
             sent = True
             return {"type": "http.request", "body": body, "more_body": False}
 
-        return await self.app(scope, replay, send)
+        return await self.run_app(scope, replay, send, lang, data)
+
+    async def run_app(self, scope, receive, send, lang: str, data: dict | None = None) -> None:
+        """A crash becomes a spoken JSON reply. Only the error type and path are logged.
+
+        On a crash, FastAPI first sends its own plain text 500 and then raises. That 500 is
+        held back here, so the page gets JSON it can read aloud instead.
+        """
+        started = False
+        held: list[dict] = []
+
+        async def tracked(message):
+            nonlocal started
+            if message["type"] == "http.response.start" and message.get("status", 200) >= 500:
+                held.append(message)
+                return
+            if held:
+                held.append(message)
+                return
+            if message["type"] == "http.response.start":
+                started = True
+            await send(message)
+
+        try:
+            await self.app(scope, receive, tracked)
+        except Exception as error:
+            log.error("unhandled %s on %s", type(error).__name__, scope.get("path"))
+            if started:
+                raise
+            await self.refuse(send, 500, "server_error", lang, data or {})
+            return
+        # A 5xx the app chose to send on purpose, with no crash, goes out unchanged.
+        for message in held:
+            await send(message)
 
 
 def protect(main, settings: Settings | None = None, make_transport=httpx.AsyncHTTPTransport) -> DemoGuard:
@@ -325,6 +409,8 @@ def protect(main, settings: Settings | None = None, make_transport=httpx.AsyncHT
         os.environ.pop(name, None)
     # Trade history is one local file, and every visitor here would share it.
     main.history.enabled = False
+    # Agent commands then explain that this is the public demo, not a broken setup.
+    main.public_demo = True
     # Suggestions and speech to text call OpenAI outside the metered parser, so they stay off.
     # The body limit already refuses any recording.
     main.intent_repair.llm_allowed = False

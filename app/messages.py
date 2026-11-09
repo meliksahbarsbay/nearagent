@@ -30,10 +30,18 @@ TURKISH_ACCUSATIVE = {
 MESSAGES = {
     "tr": {
         "no_agent": "Ajan cüzdanı kurulmadı. Kurulum bitince yeniden dene.",
+        "demo_no_agent": (
+            "Bu herkese açık demo, burada ajan cüzdanı yok. Bakiye, politika, bütçe, çekim ve dondurma "
+            "yalnızca sahibin kendi kurulumunda gerçek ajanla çalışır. Demo videosu bunları canlı gösteriyor. "
+            "Burada takas teklifi ve fiyat alabilirsin."
+        ),
+        "freeze_question": "Ajanı dondurmamı istiyor musun? Çözene kadar takas ve çekim yapamaz. Dondurmak için evet de, vazgeçmek için hayır de.",
+        "freeze_not_done": "Evet duymadım, ajanı dondurmadım. Dondurmak için ajanı dondur de.",
+        "stop_cancelled": "İptal ettim, işlem yapılmadı. Ajanı dondurmak istersen ajanı dondur de.",
         "withdraw_terms": "{mode} Çekilecek: {amount} {symbol}. Nereye: sahip adresin, {chain} ağı. {received} {fee} {budget} Teklif {ttl} dakika geçerli.",
         "withdraw_capped": "Hepsi tek seferde çekilemez, tek işlem sınırı bu kadar.",
         "withdraw_native": "wNEAR sahip hesabına native NEAR olarak ulaşır.",
-        "withdraw_stays": "Dikkat, bu token sahip hesabında kalır ve oradan Binance'e gönderilemez. Binance'e dönecekse önce NEAR'a çevir.",
+        "withdraw_stays": "Dikkat, bu token sahip hesabında kalır. Bir borsaya göndermek istersen önce NEAR'a çevir.",
         "withdraw_received": "Ulaşacak: yaklaşık {amount} {symbol}.",
         "withdraw_received_unknown": "Ulaşacak tutar önizlemede yok.",
         "withdraw_budget": "Bu çekim günlük bütçenden yaklaşık {usd} dolar düşer, kalan {left} dolar olur.",
@@ -52,7 +60,10 @@ MESSAGES = {
         "withdraw_preview_limit": "Bugünkü önizleme hakkı doldu, işlem yapılmadı. Yarın tekrar dene.",
         "agent_read_failed": "Ajan bilgisi alınamadı. Biraz sonra yeniden dene.",
         "policy_not_ready": "Politika henüz yürürlükte değil. Biraz sonra yeniden sor.",
-        "policy": "Politika: izinli işlemler {actions}. {assets} varlık izinli. {budget} {frozen}",
+        "policy": "Politika: izinli işlemler {actions}. {assets} {budget} {frozen}",
+        "policy_assets": "{count} varlık izinli.",
+        "policy_one_asset": "1 varlık izinli.",
+        "policy_all_assets": "Tüm varlık izinli.",
         "action_names": {"swap": "takas", "withdraw": "çekim", "transfer": "transfer"},
         "action_join": " ve ",
         "policy_budget": "Günlük bütçe {limit} dolar.",
@@ -69,6 +80,7 @@ MESSAGES = {
         "control_failed": "İşlem tamamlanmadı, ajanın durumu değişmedi. Yeniden dene ya da terminaldeki sahip betiğini kullan.",
         "control_pending": "İstek gönderildi, ama sonuç henüz belli değil. Biraz sonra politikamı oku de.",
         "unfreeze_wait": "Ajan şimdi çözülemez, ağın bekleme süresi dolmadı. Yaklaşık {minutes} dakika sonra yeniden dene.",
+        "unfreeze_wait_one": "Ajan şimdi çözülemez, ağın bekleme süresi dolmadı. Yaklaşık 1 dakika sonra yeniden dene.",
         "unfreeze_plan": (
             "Ajanı çözmek için sahip anahtarıyla imza atacağım. "
             "Ajan yeniden işlem yapabilir hale gelir, politikası değişmez. "
@@ -114,7 +126,8 @@ MESSAGES = {
         "repair_sentence_usd": "{amount} dolarlık {from_acc} {to_dat} çevir",
         "repair_no_yes": "Evet demediğin için iptal ettim, teklif istemedim. Cümleyi yeniden söyle.",
         "supported_tokens": "Kullanabileceğin tokenler: {tokens}.",
-        "stt_off": "OpenAI ses tanıma kapalı, tarayıcının ses tanımasını kullanıyorum.",
+        "stt_off": "{engine} ses tanıma kapalı, tarayıcının ses tanımasını kullanıyorum.",
+        "stt_server": "Sunucudaki",
         "stt_failed": "Kaydı yazıya çeviremedim. Yeniden dene ya da cümleyi yaz.",
         "stt_too_long": "Kayıt çok uzun. Daha kısa konuş ya da cümleyi yaz.",
         "live_refunded": "İade edildi. Para ajanın kendi bakiyesine döndü. Yeni bir teklif isteyebilirsin.",
@@ -145,6 +158,8 @@ MESSAGES = {
         "history_empty": "Henüz kayıtlı işlem yok. Bir teklifi onaylayınca burada görünür.",
         "history_broken": "İşlem geçmişi okunamadı. Geçmiş dosyası düzelene kadar yeniden dene.",
         "history_intro": "Son {count} işlem.",
+        "history_intro_one": "Son 1 işlem.",
+        "history_row_dry": "İşlem {number}: {date}, deneme. Teklif: {gave} {gave_symbol} karşılığında {got} {got_symbol}, işlem yapılmadı.",
         "history_row": "İşlem {number}: {date}, {mode}. {gave} {gave_symbol} verildi, {got} {got_symbol} alındı, {status}.",
         "history_date": "{day} {month}, saat {time}",
         "history_months": ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"],
@@ -173,6 +188,7 @@ MESSAGES = {
         "fee_tiny": "Ücret: 0,01 dolardan az.",
         "fee_unknown": "Ücret bilgisi yok.",
         "seconds": "{count} saniye",
+        "second_one": "1 saniye",
         "minutes": "{count} dakika",
         "confirm_question": "Onaylıyor musun? Evet de ya da Enter'a bas.",
         "large_question": (
@@ -190,11 +206,15 @@ MESSAGES = {
         "assumed_join": " ve ",
         "help": (
             "Takas teklifi ve fiyat söyleyebilirim. Örnek: 2 NEAR'ı USDC'ye çevir, "
-            "ya da 1 SOL kaç dolar. Deneme modundasın, para hareket etmez."
+            "ya da 1 SOL kaç dolar. Ajan komutları: cüzdanımda ne var, politikamı oku, "
+            "bütçem ne kadar kaldı, son işlemlerimi oku, paramı cüzdanıma çek, ajanı dondur. "
+            "Deneme modundasın, para hareket etmez."
         ),
         "help_live": (
             "Takas teklifi ve fiyat söyleyebilirim. Örnek: 2 NEAR'ı USDC'ye çevir, "
-            "ya da 1 SOL kaç dolar. Canlı mod açık, onayladığın takaslar gerçek para kullanır."
+            "ya da 1 SOL kaç dolar. Ajan komutları: cüzdanımda ne var, politikamı oku, "
+            "bütçem ne kadar kaldı, son işlemlerimi oku, paramı cüzdanıma çek, ajanı dondur. "
+            "Canlı mod açık, onayladığın takaslar gerçek para kullanır."
         ),
         "empty_text": "Cümle boş. Bir cümle yaz, örneğin 1 SOL kaç dolar.",
         "too_long": "Cümle çok uzun. Daha kısa yaz.",
@@ -212,10 +232,18 @@ MESSAGES = {
     },
     "en": {
         "no_agent": "The agent wallet is not set up. Try again after setup.",
+        "demo_no_agent": (
+            "This is the public demo, so there is no agent wallet here. Balance, policy, budget, withdraw "
+            "and freeze work only on the owner's own setup, with a real agent. The demo video shows them live. "
+            "Here you can get swap quotes and prices."
+        ),
+        "freeze_question": "Do you want to freeze the agent? It cannot swap or withdraw until you unfreeze it. Say yes to freeze, or no to keep it running.",
+        "freeze_not_done": "I did not hear a yes, so the agent was not frozen. To freeze it, say freeze the agent.",
+        "stop_cancelled": "Cancelled, nothing was executed. To freeze the agent, say freeze the agent.",
         "withdraw_terms": "{mode} Withdrawing: {amount} {symbol}. To: your owner address, on {chain}. {received} {fee} {budget} Quote valid for {ttl} minutes.",
         "withdraw_capped": "All of it cannot go at once, so this is the limit for one transaction.",
         "withdraw_native": "wNEAR arrives at the owner account as native NEAR.",
-        "withdraw_stays": "Warning: this token stays on the owner account and cannot go on to Binance from there. To return it, swap to NEAR first.",
+        "withdraw_stays": "Warning: this token stays on the owner account. To send it on to an exchange, swap it to NEAR first.",
         "withdraw_received": "Arriving: about {amount} {symbol}.",
         "withdraw_received_unknown": "The preview does not show the amount arriving.",
         "withdraw_budget": "This takes about {usd} dollars from your daily budget, leaving {left} dollars.",
@@ -234,7 +262,10 @@ MESSAGES = {
         "withdraw_preview_limit": "Today's previews are used up, so nothing was sent. Try again tomorrow.",
         "agent_read_failed": "I could not read the agent. Try again shortly.",
         "policy_not_ready": "The policy is not in force yet. Ask again shortly.",
-        "policy": "Policy: allowed actions are {actions}. {assets} assets are allowed. {budget} {frozen}",
+        "policy": "Policy: allowed actions are {actions}. {assets} {budget} {frozen}",
+        "policy_assets": "{count} assets are allowed.",
+        "policy_one_asset": "One asset is allowed.",
+        "policy_all_assets": "All assets are allowed.",
         "action_names": {"swap": "swap", "withdraw": "withdraw", "transfer": "transfer"},
         "action_join": " and ",
         "policy_budget": "The daily budget is {limit} dollars.",
@@ -251,6 +282,7 @@ MESSAGES = {
         "control_failed": "That did not complete, and the agent's state did not change. Try again or use the owner script in a terminal.",
         "control_pending": "The request was sent, but the result is not known yet. Shortly, say read my policy.",
         "unfreeze_wait": "The agent cannot be unfrozen yet, because the cooldown is still running. Try again in about {minutes} minutes.",
+        "unfreeze_wait_one": "The agent cannot be unfrozen yet, because the cooldown is still running. Try again in about a minute.",
         "unfreeze_plan": (
             "To unfreeze the agent I will sign with the owner key. "
             "The agent can act again, and its policy does not change. "
@@ -296,7 +328,8 @@ MESSAGES = {
         "repair_sentence_usd": "swap {amount} dollars of {from_token} to {to_token}",
         "repair_no_yes": "You did not say yes, so I cancelled and asked for no quote. Say the sentence again.",
         "supported_tokens": "Tokens you can use: {tokens}.",
-        "stt_off": "OpenAI speech recognition is off, so I am using the browser's own.",
+        "stt_off": "{engine} speech recognition is off, so I am using the browser's own.",
+        "stt_server": "Server",
         "stt_failed": "I could not turn the recording into text. Try again, or type the sentence.",
         "stt_too_long": "The recording is too long. Speak for less time, or type the sentence.",
         "live_refunded": "Refunded. The funds went back to the agent's own balance. You can ask for a new quote.",
@@ -327,6 +360,8 @@ MESSAGES = {
         "history_empty": "There are no saved trades yet. They appear here once you confirm a quote.",
         "history_broken": "The trade history could not be read. Try again once that file is fixed.",
         "history_intro": "Last {count} trades.",
+        "history_intro_one": "Your last trade.",
+        "history_row_dry": "Trade {number}: {date}, dry run. Quote: {gave} {gave_symbol} for {got} {got_symbol}, nothing executed.",
         "history_row": "Trade {number}: {date}, {mode}. Gave {gave} {gave_symbol}, received {got} {got_symbol}, {status}.",
         "history_date": "{month} {day} at {time}",
         "history_months": ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
@@ -355,6 +390,7 @@ MESSAGES = {
         "fee_tiny": "Fee: under 0.01 dollars.",
         "fee_unknown": "No fee information.",
         "seconds": "{count} seconds",
+        "second_one": "1 second",
         "minutes": "{count} minutes",
         "confirm_question": "Do you confirm? Say yes or press Enter.",
         "large_question": (
@@ -372,11 +408,15 @@ MESSAGES = {
         "assumed_join": " and ",
         "help": (
             "I can give swap quotes and prices. For example: swap 2 NEAR to USDC, "
-            "or what is 1 SOL worth. You are in dry mode, so no funds move."
+            "or what is 1 SOL worth. Agent commands: what's my balance, read my policy, "
+            "how much budget is left, read my recent trades, withdraw to my wallet, freeze the agent. "
+            "You are in dry mode, so no funds move."
         ),
         "help_live": (
             "I can give swap quotes and prices. For example: swap 2 NEAR to USDC, "
-            "or what is 1 SOL worth. Live mode is on, and swaps you confirm use real money."
+            "or what is 1 SOL worth. Agent commands: what's my balance, read my policy, "
+            "how much budget is left, read my recent trades, withdraw to my wallet, freeze the agent. "
+            "Live mode is on, and swaps you confirm use real money."
         ),
         "empty_text": "The sentence is empty. Type one, for example what is 1 SOL worth.",
         "too_long": "That sentence is too long. Try a shorter one.",
@@ -497,6 +537,8 @@ def from_atomic(value: str, decimals: int) -> str:
 
 
 def say_duration(seconds: int, lang: str) -> str:
+    if seconds == 1:
+        return say("second_one", lang)
     if seconds < SECONDS_BEFORE_MINUTES:
         return say("seconds", lang, count=seconds)
     return say("minutes", lang, count=round(seconds / 60))
@@ -534,7 +576,8 @@ def say_time(seconds: int | None, lang: str) -> str:
 def say_live_status(view: dict, lang: str) -> str:
     """One plain sentence for each state a live swap can reach."""
     state = view["state"]
-    values = {"amount": format_amount(view.get("amount") or "0", lang), "symbol": view.get("symbol")}
+    symbol = withdraw_symbol(view.get("symbol")) if view.get("withdraw") else view.get("symbol")
+    values = {"amount": format_amount(view.get("amount") or "0", lang), "symbol": symbol}
     if state == "done":
         key = "withdraw_done" if view.get("withdraw") else "live_done"
         if not view.get("proof"):
@@ -600,14 +643,27 @@ def say_policy(data: dict, lang: str) -> str:
         "policy",
         lang,
         actions=actions,
-        assets=len(assets) if isinstance(assets, list) else say_all_assets(lang),
+        assets=say_assets(assets, lang),
         budget=budget,
         frozen=say("policy_frozen" if policy["frozen"] else "policy_active", lang),
     )
 
 
-def say_all_assets(lang: str) -> str:
-    return "Tüm" if lang == "tr" else "All"
+def say_assets(assets, lang: str) -> str:
+    """How many assets the policy allows. A list of one is singular, anything else is all."""
+    if not isinstance(assets, list):
+        return say("policy_all_assets", lang)
+    if len(assets) == 1:
+        return say("policy_one_asset", lang)
+    return say("policy_assets", lang, count=len(assets))
+
+
+# The agent holds NEAR as wNEAR, but it reaches the owner as native NEAR, and the user said NEAR.
+WITHDRAW_SPOKEN_SYMBOL = {"wNEAR": "NEAR"}
+
+
+def withdraw_symbol(symbol: str) -> str:
+    return WITHDRAW_SPOKEN_SYMBOL.get(symbol, symbol)
 
 
 def say_balances(data: dict, lang: str) -> str:
@@ -653,7 +709,7 @@ def say_history(entries: list[dict], lang: str) -> str:
     table = MESSAGES[lang]
     rows = [
         say(
-            "history_row",
+            "history_row_dry" if entry["mode"] == "dry" else "history_row",
             lang,
             number=number,
             date=say_date(entry["at"], lang),
@@ -666,14 +722,19 @@ def say_history(entries: list[dict], lang: str) -> str:
         )
         for number, entry in enumerate(entries, start=1)
     ]
-    return " ".join([say("history_intro", lang, count=len(entries)), *rows])
+    if len(entries) == 1:
+        intro = say("history_intro_one", lang)
+    else:
+        intro = say("history_intro", lang, count=len(entries))
+    return " ".join([intro, *rows])
 
 
 def say_withdraw(order, lang: str, ttl: int) -> str:
     """The terms of a withdrawal. The address has a copy button and is never read aloud."""
+    symbol = withdraw_symbol(order.symbol)
     if order.received_text:
         amount = format_amount(order.received_text, lang)
-        received = say("withdraw_received", lang, amount=amount, symbol=order.symbol)
+        received = say("withdraw_received", lang, amount=amount, symbol=symbol)
     else:
         received = say("withdraw_received_unknown", lang)
     usd = format_usd(str(order.usd), lang)
@@ -687,7 +748,7 @@ def say_withdraw(order, lang: str, ttl: int) -> str:
         lang,
         mode=say("mode_live", lang),
         amount=format_amount(order.amount_text, lang),
-        symbol=order.symbol,
+        symbol=symbol,
         chain=chain_name(order.chain),
         received=received,
         fee=say_fee(fee, lang),
