@@ -18,6 +18,23 @@ MISHEARD = [
     (re.compile(r"\busd\s+t\b", re.IGNORECASE), "USDT"),
     (re.compile(r"\beter\b", re.IGNORECASE), "ETH"),
 ]
+# Whisper hears SOL as "soul". That is a real word, so it is a token only where a token goes:
+# after an amount, as in "one soul", or joined by "to" or "into" to another token name.
+TOKEN_WORDS = r"(?:w?near|usdc|usdt|tether|sol|solana|eth|ether|ethereum|btc|bitcoin)"
+SOUL = r"souls?"
+# Turkish "on" (ten) is left out, because English "on soul" is not an amount.
+NUMBER_WORDS = "|".join(
+    sorted((re.escape(word) for word in {*ONES_EN, *ONES_TR, *SCALES} - {"on"}), key=len, reverse=True)
+)
+AMOUNT = rf"(?:\d+(?:[.,]\d+)*|{NUMBER_WORDS})"
+SOUL_AS_SOL = [
+    re.compile(rf"\b(?P<before>{AMOUNT}\s+){SOUL}\b", re.IGNORECASE),
+    re.compile(rf"\b(?P<before>{TOKEN_WORDS}\s+(?:to|into)\s+){SOUL}\b", re.IGNORECASE),
+    re.compile(rf"\b{SOUL}(?P<after>\s+(?:to|into)\s+{TOKEN_WORDS})\b", re.IGNORECASE),
+]
+# "Swap two SOL to ETH" is often heard as "swap to SOL to ETH". Only this exact shape is read
+# as 2, and never in the text: the caller asks "Did you mean: swap 2 SOL to ETH?" first.
+TWO_HEARD_AS_TO = re.compile(rf"^\W*swap\s+to\s+({TOKEN_WORDS})\s+to\s+({TOKEN_WORDS})\W*$", re.IGNORECASE)
 DECIMAL_WORDS = {"virgul": ",", "nokta": ",", "point": ".", "dot": "."}
 DIGITS = {word: value for word, value in (ONES_TR | ONES_EN).items() if value < 10}
 # Words people add to an amount when asked how much, which the amount reader refuses.
@@ -87,7 +104,20 @@ def normalize_voice(text: str) -> str:
     """Fix misheard token names and spoken decimals. Everything else stays as heard."""
     for pattern, replacement in MISHEARD:
         text = pattern.sub(replacement, text)
-    return spoken_decimals(text)
+    return soul_as_sol(spoken_decimals(text))
+
+
+def soul_as_sol(text: str) -> str:
+    """ "one soul", "ETH to soul", and "soul to ETH" mean SOL. "my soul" stays."""
+    for pattern in SOUL_AS_SOL:
+        text = pattern.sub(lambda match: (match.groupdict().get("before") or "") + "SOL" + (match.groupdict().get("after") or ""), text)
+    return text
+
+
+def two_heard_as_to(text: str) -> tuple[str, str] | None:
+    """The two token words of "swap to SOL to ETH", or None for any other sentence."""
+    match = TWO_HEARD_AS_TO.match(text.strip())
+    return (match[1], match[2]) if match else None
 
 
 def amount_answer(text: str) -> str:

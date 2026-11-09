@@ -50,7 +50,7 @@ from app.confirm import (  # noqa: E402
     voice_says_no,
 )
 from app.intent import Intent, ParserUnavailable, parse_intent  # noqa: E402
-from app.voice_text import amount_answer, normalize_voice  # noqa: E402
+from app.voice_text import amount_answer, normalize_voice, two_heard_as_to  # noqa: E402
 from app import intent_repair  # noqa: E402
 from app import transcribe as speech  # noqa: E402
 from app.providers import near_ai_key  # noqa: E402
@@ -716,12 +716,32 @@ def from_dictation(data: AskInput) -> AskInput:
     return data.model_copy(update={"text": text})
 
 
+def two_question(data: AskInput):
+    """Spoken "swap to SOL to ETH" probably said two. Ask "Did you mean: swap 2 SOL to ETH?"
+
+    Nothing is quoted until yes, so a wrong 2 is refused with no. None for other sentences.
+    """
+    words = two_heard_as_to(data.text) if not data.pending else None
+    if words is None:
+        return None
+    allowed = intent_repair.supported(data.live)
+    tickers = [intent_repair.ALIASES.get(word.casefold()) for word in words]
+    if any(ticker not in allowed for ticker in tickers) or tickers[0] == tickers[1]:
+        return None
+    try:
+        require_live(data.live)
+    except QuoteError as error:
+        return error_response(error, "en")
+    return repair_question({"from_token": tickers[0], "to_token": tickers[1], "amount": "2"}, "en", data.live)
+
+
 @app.post("/api/ask")
 async def ask(data: AskInput, client: OneClick = Depends(get_oneclick)):
     if data.voice:
         return voiced_offer(await ask_by_voice(data, client))
     if data.source == "dictation":
-        return await answer_ask(from_dictation(data), client)
+        fixed = from_dictation(data)
+        return two_question(fixed) or await answer_ask(fixed, client)
     return await answer_ask(data, client)
 
 
@@ -732,6 +752,9 @@ async def ask_by_voice(data: AskInput, client: OneClick):
     if waiting is not None and waiting.kind in ("amount", "repair_amount"):
         text = amount_answer(text)
     data = data.model_copy(update={"text": text})
+    guessed = two_question(data)
+    if guessed is not None:
+        return guessed
     command = detect_command(text) if len(text) <= MAX_SENTENCE else None
     if data.pending and not (command and command[0] == "freeze"):
         lang = data.lang or detect_language(text)
